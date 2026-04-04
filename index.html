@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ExamLens — Intelligent Exam Grading</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy:        #0d1b2a;
+      --navy-mid:    #152336;
+      --navy-light:  #1e3553;
+      --navy-border: #2a4a6b;
+      --ivory:       #f5f0e8;
+      --ivory-dim:   #c8c0ae;
+      --amber:       #c9913a;
+      --amber-light: #e5b86a;
+      --amber-glow:  rgba(201,145,58,0.18);
+      --red-err:     #e05c5c;
+      --green-ok:    #5cb87a;
+      --font-display:'Cormorant Garamond', Georgia, serif;
+      --font-body:   'DM Sans', system-ui, sans-serif;
+      --font-mono:   'JetBrains Mono', monospace;
+      --radius: 10px;
+      --shadow: 0 8px 40px rgba(0,0,0,0.45);
+      --transition: 0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{
+      font-family:var(--font-body);
+      background-color:var(--navy);
+      color:var(--ivory);
+      min-height:100vh;
+      overflow-x:hidden;
+      background-image:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(201,145,58,0.08) 0%,transparent 70%);
+    }
+
+    /* ── LOGIN ── */
+    #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+    .login-card{background:var(--navy-mid);border:1px solid var(--navy-border);border-radius:16px;padding:52px 44px 44px;width:100%;max-width:420px;box-shadow:var(--shadow);animation:fadeUp 0.6s ease both;}
+    .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:32px;}
+    .login-logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--amber),var(--amber-light));border-radius:8px;display:grid;place-items:center;font-size:18px;}
+    .login-logo-name{font-family:var(--font-display);font-size:1.7rem;font-weight:600;color:var(--ivory);}
+    .login-logo-name span{color:var(--amber);}
+    .login-headline{font-family:var(--font-display);font-size:1.6rem;font-weight:600;margin-bottom:6px;}
+    .login-sub{font-size:0.85rem;color:var(--ivory-dim);margin-bottom:32px;font-weight:300;line-height:1.5;}
+    .field-group{margin-bottom:18px;}
+    .field-group label{display:block;font-size:0.75rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--ivory-dim);margin-bottom:7px;}
+    .field-group input{width:100%;background:var(--navy);border:1px solid var(--navy-border);border-radius:var(--radius);padding:12px 14px;color:var(--ivory);font-family:var(--font-body);font-size:0.95rem;outline:none;transition:border-color var(--transition),box-shadow var(--transition);}
+    .field-group input:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-glow);}
+    .field-group input::placeholder{color:rgba(200,192,174,0.35);}
+    .btn-primary{width:100%;background:linear-gradient(135deg,var(--amber),var(--amber-light));color:var(--navy);border:none;border-radius:var(--radius);padding:13px;font-family:var(--font-body);font-size:0.9rem;font-weight:600;letter-spacing:0.04em;cursor:pointer;transition:opacity var(--transition),transform var(--transition),box-shadow var(--transition);margin-top:10px;}
+    .btn-primary:hover{opacity:0.9;transform:translateY(-1px);box-shadow:0 6px 20px rgba(201,145,58,0.3);}
+    #login-error{display:none;margin-top:14px;padding:10px 14px;background:rgba(224,92,92,0.12);border:1px solid rgba(224,92,92,0.35);border-radius:var(--radius);color:var(--red-err);font-size:0.82rem;text-align:center;}
+
+    /* ── NAVBAR ── */
+    #app-screen{display:none;min-height:100vh;}
+    .navbar{position:sticky;top:0;z-index:100;background:rgba(13,27,42,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--navy-border);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;}
+    .nav-brand{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-size:1.35rem;font-weight:600;color:var(--ivory);}
+    .nav-brand-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--amber),var(--amber-light));border-radius:6px;display:grid;place-items:center;font-size:14px;}
+    .nav-brand span{color:var(--amber);}
+    .nav-right{display:flex;align-items:center;gap:12px;}
+    .nav-teacher-badge{font-size:0.78rem;color:var(--ivory-dim);display:flex;align-items:center;gap:6px;}
+    .nav-teacher-badge::before{content:'';width:7px;height:7px;background:var(--green-ok);border-radius:50%;}
+    .btn-logout{background:transparent;border:1px solid var(--navy-border);color:var(--ivory-dim);border-radius:7px;padding:6px 12px;font-family:var(--font-body);font-size:0.78rem;cursor:pointer;transition:all var(--transition);}
+    .btn-logout:hover{border-color:var(--amber);color:var(--amber);}
+
+    /* ── MAIN ── */
+    .main-content{max-width:820px;margin:0 auto;padding:40px 24px 80px;}
+    .page-header{margin-bottom:36px;}
+    .page-header h1{font-family:var(--font-display);font-size:clamp(1.9rem,4vw,2.6rem);font-weight:700;line-height:1.15;margin-bottom:8px;}
+    .page-header h1 em{font-style:italic;color:var(--amber);}
+    .page-header p{font-size:0.9rem;color:var(--ivory-dim);font-weight:300;line-height:1.6;max-width:500px;}
+
+    /* ── UPLOAD CARD ── */
+    .upload-card{background:var(--navy-mid);border:1px solid var(--navy-border);border-radius:16px;padding:36px;margin-bottom:28px;box-shadow:var(--shadow);animation:fadeUp 0.5s ease both;}
+    .upload-card h2{font-family:var(--font-display);font-size:1.25rem;font-weight:600;margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+    .step-num{background:var(--amber-glow);border:1px solid rgba(201,145,58,0.4);color:var(--amber);font-family:var(--font-mono);font-size:0.75rem;font-weight:600;width:26px;height:26px;border-radius:6px;display:grid;place-items:center;flex-shrink:0;}
+    .drop-zone{border:2px dashed var(--navy-border);border-radius:12px;padding:40px 24px;text-align:center;cursor:pointer;transition:border-color var(--transition),background var(--transition);position:relative;overflow:hidden;}
+    .drop-zone:hover,.drop-zone.dragover{border-color:var(--amber);background:var(--amber-glow);}
+    .drop-zone-icon{font-size:2.4rem;margin-bottom:12px;display:block;opacity:0.7;}
+    .drop-zone-label{font-size:0.95rem;font-weight:500;margin-bottom:5px;}
+    .drop-zone-sub{font-size:0.8rem;color:var(--ivory-dim);font-weight:300;}
+    .drop-zone-sub strong{color:var(--amber);font-weight:500;}
+    #file-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+    .btn-camera{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;background:var(--navy-light);border:1px solid var(--navy-border);color:var(--ivory);border-radius:var(--radius);padding:12px;font-family:var(--font-body);font-size:0.88rem;font-weight:500;cursor:pointer;transition:all var(--transition);position:relative;overflow:hidden;}
+    .btn-camera:hover{border-color:var(--amber-light);}
+    #camera-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+    #image-preview-container{display:none;margin-top:18px;position:relative;}
+    #image-preview{width:100%;max-height:340px;object-fit:contain;border-radius:10px;border:1px solid var(--navy-border);}
+    .preview-clear-btn{position:absolute;top:8px;right:8px;background:rgba(13,27,42,0.85);border:1px solid var(--navy-border);color:var(--ivory-dim);border-radius:50%;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;font-size:14px;transition:all var(--transition);}
+    .preview-clear-btn:hover{background:var(--red-err);color:white;border-color:var(--red-err);}
+    .btn-grade{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;margin-top:20px;background:linear-gradient(135deg,var(--amber),var(--amber-light));color:var(--navy);border:none;border-radius:var(--radius);padding:14px;font-family:var(--font-body);font-size:0.92rem;font-weight:600;letter-spacing:0.04em;cursor:pointer;transition:all var(--transition);}
+    .btn-grade:hover{opacity:0.9;transform:translateY(-1px);box-shadow:0 6px 24px rgba(201,145,58,0.32);}
+    .btn-grade:disabled{opacity:0.45;cursor:not-allowed;transform:none;}
+
+    /* ── LOADING ── */
+    #loading-section{display:none;text-align:center;padding:50px 24px;animation:fadeIn 0.3s ease;}
+    .spinner-ring{width:54px;height:54px;border:3px solid var(--navy-border);border-top-color:var(--amber);border-radius:50%;animation:spin 0.9s linear infinite;margin:0 auto 20px;}
+    .loading-headline{font-family:var(--font-display);font-size:1.3rem;font-weight:600;margin-bottom:16px;}
+    .loading-steps{list-style:none;display:flex;flex-direction:column;gap:6px;}
+    .loading-steps li{font-size:0.8rem;color:var(--ivory-dim);font-weight:300;display:flex;align-items:center;justify-content:center;gap:8px;}
+    .loading-steps li.active{color:var(--amber-light);}
+    .step-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;}
+
+    /* ── RESULTS ── */
+    #results-section{display:none;animation:fadeUp 0.5s ease both;}
+    .results-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;}
+    .results-header h2{font-family:var(--font-display);font-size:1.5rem;font-weight:600;}
+    .results-header h2 span{color:var(--amber);font-style:italic;}
+    .btn-new-exam{background:transparent;border:1px solid var(--navy-border);color:var(--ivory-dim);border-radius:8px;padding:8px 16px;font-family:var(--font-body);font-size:0.82rem;cursor:pointer;transition:all var(--transition);}
+    .btn-new-exam:hover{border-color:var(--amber);color:var(--amber);}
+
+    /* Score banner */
+    .score-banner{background:var(--navy-mid);border:1px solid var(--navy-border);border-radius:14px;padding:24px 28px;display:flex;align-items:center;gap:24px;margin-bottom:20px;flex-wrap:wrap;}
+    .score-circle{position:relative;width:72px;height:72px;flex-shrink:0;}
+    .score-circle svg{transform:rotate(-90deg);}
+    .score-circle-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:1rem;font-weight:600;color:var(--amber);line-height:1.1;}
+    .score-circle-text small{font-size:0.55rem;color:var(--ivory-dim);font-weight:400;}
+    .score-meta{flex:1;min-width:180px;}
+    .score-meta h3{font-family:var(--font-display);font-size:1.15rem;font-weight:600;margin-bottom:4px;}
+    .score-meta p{font-size:0.82rem;color:var(--ivory-dim);font-weight:300;line-height:1.5;}
+    .score-stats{display:flex;gap:20px;}
+    .stat-item{text-align:center;}
+    .stat-value{font-family:var(--font-mono);font-size:1.3rem;font-weight:600;line-height:1;margin-bottom:3px;}
+    .stat-value.err{color:var(--red-err);}
+    .stat-label{font-size:0.7rem;color:var(--ivory-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:500;}
+
+    /* Result card */
+    .result-card{background:var(--navy-mid);border:1px solid var(--navy-border);border-radius:14px;padding:26px 28px;margin-bottom:16px;}
+    .result-card-title{font-size:0.72rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+    .result-card-title::after{content:'';flex:1;height:1px;background:var(--navy-border);}
+
+    /* ── ANNOTATED TEXT (red pen view) ── */
+    .annotated-text{font-family:var(--font-body);font-size:0.92rem;line-height:2.6;color:var(--ivory);font-weight:300;white-space:pre-wrap;}
+    .error-highlight{position:relative;display:inline;text-decoration:underline wavy #d95f5f;text-decoration-skip-ink:none;text-underline-offset:4px;color:#f0b8b8;cursor:help;padding-bottom:1px;}
+    .error-highlight::after{content:attr(data-code);position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);font-family:var(--font-mono);font-size:0.58rem;font-weight:600;letter-spacing:0.05em;line-height:1;white-space:nowrap;background:var(--amber);color:var(--navy);padding:2px 5px;border-radius:3px;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));}
+    .error-highlight::before{content:'';position:absolute;bottom:calc(100% + 1px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:var(--amber);pointer-events:none;z-index:1;}
+    .error-highlight:hover{color:#f8d0d0;}
+
+    /* ── TABS ── */
+    .view-tabs{display:flex;border:1px solid var(--navy-border);border-radius:8px;overflow:hidden;margin-bottom:16px;width:fit-content;}
+    .view-tab{background:transparent;border:none;padding:7px 18px;font-family:var(--font-body);font-size:0.78rem;font-weight:500;color:var(--ivory-dim);cursor:pointer;transition:all var(--transition);}
+    .view-tab:not(:last-child){border-right:1px solid var(--navy-border);}
+    .view-tab.active{background:var(--amber-glow);color:var(--amber);}
+
+    /* ── EDIT PANE ── */
+    .edit-pane{display:flex;flex-direction:column;gap:12px;}
+    .textarea-transcription{width:100%;min-height:160px;background:var(--navy);border:1px solid var(--navy-border);border-radius:var(--radius);padding:14px 16px;color:var(--ivory);font-family:var(--font-body);font-size:0.88rem;font-weight:300;line-height:1.75;resize:vertical;outline:none;transition:all var(--transition);}
+    .textarea-transcription:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-glow);}
+    .edit-pane-hint{font-size:0.74rem;color:var(--ivory-dim);font-weight:300;line-height:1.5;display:flex;align-items:flex-start;gap:6px;}
+    .edit-pane-hint::before{content:'✏️';font-size:0.8rem;flex-shrink:0;margin-top:1px;}
+    .btn-regrade{display:flex;align-items:center;justify-content:center;gap:8px;background:transparent;border:1.5px solid var(--amber);color:var(--amber);border-radius:var(--radius);padding:11px 20px;font-family:var(--font-body);font-size:0.88rem;font-weight:600;letter-spacing:0.04em;cursor:pointer;transition:all var(--transition);align-self:flex-start;}
+    .btn-regrade:hover{background:var(--amber-glow);box-shadow:0 4px 16px rgba(201,145,58,0.2);transform:translateY(-1px);}
+    .btn-regrade:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+    .btn-spinner{width:13px;height:13px;border:2px solid rgba(201,145,58,0.35);border-top-color:var(--amber);border-radius:50%;animation:spin 0.75s linear infinite;display:none;}
+    .btn-regrade.loading .btn-spinner{display:block;}
+
+    /* ── ERRORS LIST ── */
+    .errors-list{display:flex;flex-direction:column;gap:12px;}
+    .error-item{background:var(--navy);border:1px solid var(--navy-border);border-left:3px solid var(--red-err);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;animation:fadeUp 0.3s ease both;}
+    .error-code-badge{font-family:var(--font-mono);font-size:0.72rem;font-weight:600;background:rgba(224,92,92,0.12);border:1px solid rgba(224,92,92,0.35);color:var(--red-err);padding:3px 8px;border-radius:5px;white-space:nowrap;}
+    .error-words{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .error-wrong{font-family:var(--font-mono);font-size:0.88rem;font-weight:600;color:var(--red-err);text-decoration:line-through;text-decoration-color:rgba(224,92,92,0.5);}
+    .error-arrow{color:var(--ivory-dim);}
+    .error-correct{font-family:var(--font-mono);font-size:0.88rem;font-weight:600;color:var(--green-ok);}
+    .error-repeat-badge{font-family:var(--font-mono);font-size:0.68rem;font-weight:600;background:rgba(201,145,58,0.12);border:1px solid rgba(201,145,58,0.35);color:var(--amber);padding:2px 7px;border-radius:10px;margin-left:4px;}
+    .no-errors-badge{display:flex;align-items:center;gap:12px;padding:18px 20px;background:rgba(92,184,122,0.08);border:1px solid rgba(92,184,122,0.25);border-radius:10px;color:var(--green-ok);font-size:0.88rem;font-weight:500;}
+    .error-state-card{background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.25);border-radius:12px;padding:24px;text-align:center;}
+    .error-state-card p{color:var(--red-err);font-size:0.88rem;margin-top:8px;}
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+    @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    @media(max-width:600px){
+      .login-card{padding:36px 24px 32px;}
+      .upload-card{padding:24px 18px;}
+      .score-banner{flex-direction:column;align-items:flex-start;gap:16px;}
+      .result-card{padding:20px 16px;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">📝</div>
+      <div class="login-logo-name">Exam<span>Lens</span></div>
+    </div>
+    <h2 class="login-headline">Instructor Portal</h2>
+    <p class="login-sub">Sign in with your faculty credentials to access the intelligent grading dashboard.</p>
+    <div class="field-group">
+      <label for="login-id">Faculty ID</label>
+      <input type="text" id="login-id" placeholder="e.g. teacher1" autocomplete="username" />
+    </div>
+    <div class="field-group">
+      <label for="login-pass">Password</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button class="btn-primary" onclick="handleLogin()">Sign In</button>
+    <div id="login-error">Invalid Faculty ID or Password. Please try again.</div>
+    <p style="margin-top:16px;font-size:0.72rem;color:var(--ivory-dim);text-align:center;opacity:0.6;">
+      Demo: <code style="font-family:var(--font-mono)">teacher1</code> / <code style="font-family:var(--font-mono)">pass1234</code>
+    </p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="nav-brand-icon">📝</div>
+      Exam<span>Lens</span>
+    </div>
+    <div class="nav-right">
+      <div class="nav-teacher-badge" id="nav-teacher-name">Instructor</div>
+      <button class="btn-logout" onclick="handleLogout()">Sign Out</button>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Grade an <em>Exam Paper</em></h1>
+      <p>Upload a clear photo of the handwritten exam. The AI will transcribe, annotate errors inline, and produce a full grading report.</p>
+    </div>
+
+    <!-- UPLOAD CARD -->
+    <div class="upload-card" id="upload-section">
+      <h2><span class="step-num">1</span> Select Exam Image</h2>
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(this.files[0])" />
+        <span class="drop-zone-icon">🖼️</span>
+        <p class="drop-zone-label">Drag &amp; drop your image here</p>
+        <p class="drop-zone-sub">or <strong>click to browse</strong> — JPG, PNG, WEBP supported</p>
+      </div>
+      <button class="btn-camera">
+        <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handleFileSelect(this.files[0])" />
+        📷 Take a Photo with Camera
+      </button>
+      <div id="image-preview-container">
+        <img id="image-preview" src="" alt="Exam paper preview" />
+        <button class="preview-clear-btn" onclick="clearImage()" title="Remove">✕</button>
+      </div>
+      <button class="btn-grade" id="grade-btn" onclick="submitForGrading()" disabled>
+        ✦ Grade This Exam
+      </button>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading-section">
+      <div class="spinner-ring"></div>
+      <p class="loading-headline">Analysing the exam paper…</p>
+      <ul class="loading-steps">
+        <li class="active"><span class="step-dot"></span> Uploading image to server</li>
+        <li id="step-2"><span class="step-dot"></span> AI is reading the handwriting</li>
+        <li id="step-3"><span class="step-dot"></span> Identifying language errors</li>
+        <li id="step-4"><span class="step-dot"></span> Compiling detailed report</li>
+      </ul>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="results-section">
+      <div class="results-header">
+        <h2>Grading <span>Report</span></h2>
+        <button class="btn-new-exam" onclick="resetToUpload()">↺ Grade Another Exam</button>
+      </div>
+
+      <div class="score-banner" id="score-banner"></div>
+
+      <!-- Transcription card with tabs -->
+      <div class="result-card">
+        <div class="result-card-title">Transcribed Student Text</div>
+        <div class="view-tabs">
+          <button class="view-tab active" id="tab-annotated" onclick="switchTab('annotated')">🖊 Annotated</button>
+          <button class="view-tab" id="tab-edit" onclick="switchTab('edit')">✏️ Edit &amp; Re-Grade</button>
+        </div>
+        <div id="pane-annotated">
+          <div class="annotated-text" id="annotated-text-display">—</div>
+        </div>
+        <div id="pane-edit" style="display:none;">
+          <div class="edit-pane">
+            <p class="edit-pane-hint">Correct any OCR mistakes, then click Re-Grade. Only text is sent — no image — so it's faster and cheaper.</p>
+            <textarea class="textarea-transcription" id="editable-transcription" spellcheck="false" placeholder="Transcribed text will appear here…"></textarea>
+            <button class="btn-regrade" id="regrade-btn" onclick="submitRegrade()">
+              <span class="btn-spinner"></span>
+              <span>↻ Re-Grade Edited Text</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Errors card -->
+      <div class="result-card">
+        <div class="result-card-title">Detected Errors</div>
+        <div class="errors-list" id="errors-list"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  /* ── CONFIG ── */
+  const VALID_USERS = { 'teacher1': 'pass1234', 'teacher2': 'english99' };
+  const API_BASE    = 'http://localhost:3000';
+
+  /* ── STATE ── */
+  let currentImageFile    = null;
+  let currentImageBase64  = null;
+  let currentTranscription = '';
+
+  /* ── AUTH ── */
+  function handleLogin() {
+    const id   = document.getElementById('login-id').value.trim();
+    const pass = document.getElementById('login-pass').value;
+    const errEl = document.getElementById('login-error');
+    if (VALID_USERS[id] && VALID_USERS[id] === pass) {
+      errEl.style.display = 'none';
+      sessionStorage.setItem('examlens_user', id);
+      showApp(id);
+    } else {
+      errEl.style.display = 'block';
+      document.getElementById('login-pass').value = '';
+    }
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem('examlens_user');
+    document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    clearImage();
+  }
+
+  function showApp(username) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display   = 'block';
+    document.getElementById('nav-teacher-name').textContent = username;
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const saved = sessionStorage.getItem('examlens_user');
+    if (saved) showApp(saved);
+    ['login-id','login-pass'].forEach(id =>
+      document.getElementById(id).addEventListener('keydown', e => { if (e.key==='Enter') handleLogin(); })
+    );
+  });
+
+  /* ── FILE HANDLING + RESIZE ── */
+  function handleFileSelect(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Please select a valid image file (JPG, PNG, WEBP).');
+      return;
+    }
+    currentImageFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1000;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          if (width >= height) { height = Math.round((height/width)*MAX); width = MAX; }
+          else                 { width  = Math.round((width/height)*MAX); height = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const resizedDataUrl   = canvas.toDataURL('image/jpeg', 0.92);
+        currentImageBase64     = resizedDataUrl.split(',')[1];
+        const preview = document.getElementById('image-preview');
+        preview.src   = resizedDataUrl;
+        document.getElementById('image-preview-container').style.display = 'block';
+        document.getElementById('grade-btn').disabled = false;
+        const origKB    = Math.round(e.target.result.length * 0.75 / 1024);
+        const resizedKB = Math.round(resizedDataUrl.length  * 0.75 / 1024);
+        console.log(`Resized: ${img.naturalWidth}×${img.naturalHeight} → ${width}×${height} | ${origKB}KB → ${resizedKB}KB`);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearImage() {
+    currentImageFile = null; currentImageBase64 = null;
+    document.getElementById('image-preview-container').style.display = 'none';
+    document.getElementById('image-preview').src = '';
+    document.getElementById('file-input').value = '';
+    document.getElementById('camera-input').value = '';
+    document.getElementById('grade-btn').disabled = true;
+  }
+
+  const dropZone = document.getElementById('drop-zone');
+  dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop',      (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]); });
+
+  /* ── GRADING SUBMISSION ── */
+  async function submitForGrading() {
+    if (!currentImageBase64) return;
+    setView('loading');
+    animateLoadingSteps();
+    try {
+      const response = await fetch(`${API_BASE}/api/grade`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'x-teacher-id': sessionStorage.getItem('examlens_user')||'' },
+        body: JSON.stringify({ image: currentImageBase64, mimeType: 'image/jpeg' }),
+      });
+      if (!response.ok) { const e = await response.json().catch(()=>({})); throw new Error(e.error||`Server error: ${response.status}`); }
+      renderResults(await response.json());
+    } catch (err) {
+      console.error('Grading error:', err);
+      setView('upload');
+      showErrorBanner(err.message);
+    }
+  }
+
+  function animateLoadingSteps() {
+    [['step-2',1200],['step-3',3000],['step-4',5500]].forEach(([id,delay]) => {
+      setTimeout(() => { const el = document.getElementById(id); if(el) el.classList.add('active'); }, delay);
+    });
+  }
+
+  /* ── RENDER RESULTS ── */
+  function renderResults(data) {
+    currentTranscription = data.transcribed_text || '';
+    document.getElementById('editable-transcription').value = currentTranscription;
+    document.getElementById('annotated-text-display').innerHTML = buildHighlightedHTML(currentTranscription, data.errors);
+
+    const errorCount    = (data.errors && data.errors.length) || 0;
+    const scoreVal      = Math.max(0, 100 - (errorCount * 5));
+    const circumference = 2 * Math.PI * 30;
+    const dashOffset    = circumference - (scoreVal / 100) * circumference;
+
+    document.getElementById('score-banner').innerHTML = `
+      <div class="score-circle">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r="30" fill="none" stroke="var(--navy-border)" stroke-width="5"/>
+          <circle cx="36" cy="36" r="30" fill="none"
+            stroke="${scoreVal >= 70 ? 'var(--amber)' : 'var(--red-err)'}"
+            stroke-width="5" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}"
+            stroke-linecap="round" style="transition:stroke-dashoffset 1s ease;"/>
+        </svg>
+        <div class="score-circle-text">${scoreVal}<small>/100</small></div>
+      </div>
+      <div class="score-meta">
+        <h3>${escHtml(data.summary || 'Grading Complete')}</h3>
+        <p>Review annotated errors below. Switch to <em>Edit &amp; Re-Grade</em> to fix OCR mistakes.</p>
+      </div>
+      <div class="score-stats">
+        <div class="stat-item"><div class="stat-value err">${errorCount}</div><div class="stat-label">Errors Found</div></div>
+        <div class="stat-item"><div class="stat-value">${scoreVal}</div><div class="stat-label">Est. Score</div></div>
+      </div>`;
+
+    const errorsContainer = document.getElementById('errors-list');
+    errorsContainer.innerHTML = '';
+
+    if (!data.errors || data.errors.length === 0) {
+      errorsContainer.innerHTML = `<div class="no-errors-badge"><span>✅</span>No errors detected — excellent work!</div>`;
+    } else {
+      // Deduplicate by wrong_word (case-insensitive), count repeats
+      const seen = new Map(), deduped = [];
+      data.errors.forEach(err => {
+        const key = (err.wrong_word || '').trim().toLowerCase();
+        if (!key) return;
+        if (seen.has(key)) { deduped[seen.get(key)].count++; }
+        else { seen.set(key, deduped.length); deduped.push({ ...err, count: 1 }); }
+      });
+
+      deduped.forEach((err, i) => {
+        const item = document.createElement('div');
+        item.className = 'error-item';
+        item.style.animationDelay = `${i * 60}ms`;
+        const repeatBadge = err.count > 1 ? `<span class="error-repeat-badge">×${err.count}</span>` : '';
+        item.innerHTML = `
+          <div class="error-code-badge">${escHtml(err.error_code||'ERR')}</div>
+          <div class="error-words">
+            <span class="error-wrong">${escHtml(err.wrong_word||'')}</span>
+            <span class="error-arrow">→</span>
+            <span class="error-correct">${escHtml(err.correction||'')}</span>
+            ${repeatBadge}
+          </div>`;
+        errorsContainer.appendChild(item);
+      });
+    }
+
+    switchTab('annotated');
+    setView('results');
+  }
+
+  /* ── BUILD HIGHLIGHTED HTML (all occurrences) ── */
+  function buildHighlightedHTML(text, errors) {
+    if (!text) return '';
+    if (!errors || errors.length === 0) return escHtml(text).replace(/\n/g,'<br>');
+
+    const markers = [], usedRanges = [];
+
+    errors.forEach(err => {
+      const word = (err.wrong_word || '').trim();
+      if (!word) return;
+      let from = 0;
+      while (from < text.length) {
+        const idx = text.indexOf(word, from);
+        if (idx === -1) break;
+        const end      = idx + word.length;
+        const overlaps = usedRanges.some(r => idx < r.end && end > r.start);
+        if (!overlaps) {
+          markers.push({ start: idx, end, code: err.error_code || 'ERR' });
+          usedRanges.push({ start: idx, end });
+        }
+        from = idx + 1;
+      }
+    });
+
+    markers.sort((a,b) => a.start - b.start);
+
+    let html = '', cursor = 0;
+    markers.forEach(({ start, end, code }) => {
+      html += escHtml(text.slice(cursor, start)).replace(/\n/g,'<br>');
+      html += `<span class="error-highlight" data-code="${escHtml(code)}">${escHtml(text.slice(start,end))}</span>`;
+      cursor = end;
+    });
+    html += escHtml(text.slice(cursor)).replace(/\n/g,'<br>');
+    return html;
+  }
+
+  /* ── TAB SWITCHER ── */
+  function switchTab(tab) {
+    const isAnnotated = tab === 'annotated';
+    document.getElementById('pane-annotated').style.display = isAnnotated ? 'block' : 'none';
+    document.getElementById('pane-edit').style.display      = isAnnotated ? 'none'  : 'block';
+    document.getElementById('tab-annotated').classList.toggle('active',  isAnnotated);
+    document.getElementById('tab-edit').classList.toggle('active',      !isAnnotated);
+  }
+
+  /* ── RE-GRADE SUBMISSION ── */
+  async function submitRegrade() {
+    const editedText = document.getElementById('editable-transcription').value.trim();
+    if (!editedText) { alert('Text area is empty.'); return; }
+    const btn = document.getElementById('regrade-btn');
+    btn.disabled = true; btn.classList.add('loading');
+    try {
+      const response = await fetch(`${API_BASE}/api/regrade-text`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'x-teacher-id': sessionStorage.getItem('examlens_user')||'' },
+        body: JSON.stringify({ text: editedText }),
+      });
+      if (!response.ok) { const e = await response.json().catch(()=>({})); throw new Error(e.error||`Server error: ${response.status}`); }
+      renderResults(await response.json());
+    } catch (err) {
+      alert(`Re-grading failed: ${err.message}`);
+    } finally {
+      btn.disabled = false; btn.classList.remove('loading');
+    }
+  }
+
+  /* ── VIEW MANAGEMENT ── */
+  function setView(view) {
+    document.getElementById('upload-section').style.display  = view==='upload'  ? 'block' : 'none';
+    document.getElementById('loading-section').style.display = view==='loading' ? 'block' : 'none';
+    document.getElementById('results-section').style.display = view==='results' ? 'block' : 'none';
+  }
+
+  function resetToUpload() { clearImage(); setView('upload'); }
+
+  function showErrorBanner(message) {
+    const s = document.getElementById('results-section');
+    s.innerHTML = `
+      <div class="results-header">
+        <h2>Something Went <span>Wrong</span></h2>
+        <button class="btn-new-exam" onclick="resetToUpload()">↺ Try Again</button>
+      </div>
+      <div class="error-state-card"><p style="font-size:2rem">⚠️</p><p>${escHtml(message)}</p></div>`;
+    setView('results');
+  }
+
+  /* ── UTILITY ── */
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
