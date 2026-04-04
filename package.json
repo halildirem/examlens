@@ -1,7 +1,7 @@
 {
   "name": "examlens-grader",
-  "version": "1.0.0",
-  "description": "AI-powered handwritten English exam grading tool for preparatory school instructors.",
+  "version": "2.0.0",
+  "description": "AI-powered English exam grading with Firebase Auth + MongoDB.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,7 +11,11 @@
     "@anthropic-ai/sdk": "^0.30.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "firebase-admin": "^12.0.0",
+    "mammoth": "^1.7.0",
+    "mongoose": "^8.0.0",
+    "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
