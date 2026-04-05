@@ -43,31 +43,6 @@ const mailer = nodemailer.createTransport({
 /* ─────────────────────────────────────────────────────────────────────
    FIREBASE ADMIN!
 ───────────────────────────────────────────────────────────────────── */
-
-// Debug — remove after confirming deploy works
-console.log('[Firebase] ENV CHECK:');
-console.log('  PROJECT_ID    :', process.env.FIREBASE_PROJECT_ID    ? '✅ set' : '❌ MISSING');
-console.log('  CLIENT_EMAIL  :', process.env.FIREBASE_CLIENT_EMAIL  ? '✅ set' : '❌ MISSING');
-console.log('  PRIVATE_KEY   :', process.env.FIREBASE_PRIVATE_KEY   ? '✅ set' : '❌ MISSING');
-
-const firebaseCredential = {
-  projectId:   process.env.FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey:  (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-};
-
-// Extra guard — crash with a clear message instead of a cryptic one
-if (!firebaseCredential.projectId || !firebaseCredential.clientEmail || !firebaseCredential.privateKey) {
-  console.error('[Firebase] FATAL: One or more Firebase env vars are missing. Check Render dashboard.');
-  console.error('  projectId   :', firebaseCredential.projectId   || 'MISSING');
-  console.error('  clientEmail :', firebaseCredential.clientEmail || 'MISSING');
-  console.error('  privateKey  :', firebaseCredential.privateKey  ? '(present)' : 'MISSING');
-  process.exit(1);
-}
-
-/* ─────────────────────────────────────────────────────────────────────
-   FIREBASE ADMIN — initialized from single JSON env var
-───────────────────────────────────────────────────────────────────── */
 let serviceAccount;
 try {
   serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -77,7 +52,7 @@ try {
 }
 
 if (!serviceAccount.project_id) {
-  console.error('[Firebase] FATAL: FIREBASE_SERVICE_ACCOUNT is missing or invalid. Check Render env vars.');
+  console.error('[Firebase] FATAL: FIREBASE_SERVICE_ACCOUNT missing. Add it in Render Environment tab.');
   process.exit(1);
 }
 
@@ -86,6 +61,7 @@ admin.initializeApp({
 });
 
 console.log(`[Firebase] Initialised — project: ${serviceAccount.project_id}`);
+
 /* ─────────────────────────────────────────────────────────────────────
    MONGODB
 ───────────────────────────────────────────────────────────────────── */
