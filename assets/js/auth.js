@@ -1,7 +1,7 @@
 /**
- * auth.js — ExamLens Firebase Authentication Module  v3.0
+ * assets/js/auth.js — ExamLens Firebase Authentication Module
  *
- * Loaded after Firebase compat CDN scripts.
+ * Loaded after Firebase compat CDN scripts in index.html.
  * Exposes all auth functions as window globals.
  */
 

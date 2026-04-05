@@ -30,7 +30,16 @@ const mammoth   = require('mammoth');
 const User      = require('./models/User');
 const app  = express();
 const PORT = process.env.PORT || 3000;
+const nodemailer = require('nodemailer');
 
+// Email transporter — add GMAIL_USER and GMAIL_PASS to your .env
+const mailer = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS,
+  },
+});
 /* ─────────────────────────────────────────────────────────────────────
    FIREBASE ADMIN
 ───────────────────────────────────────────────────────────────────── */
@@ -66,13 +75,13 @@ const iyzipay = new Iyzipay({
    SCAN PLANS
 ───────────────────────────────────────────────────────────────────── */
 const PLANS = {
-  starter:      { name: 'Starter',        scans: 100,   price: 9.99,   type: 'scan' },
-  builder:      { name: 'Builder',        scans: 200,   price: 18.99,  type: 'scan' },
-  professional: { name: 'Professional',   scans: 300,   price: 27.99,  type: 'scan' },
-  master:       { name: 'Master',         scans: 500,   price: 44.99,  type: 'scan' },
-  pro3:         { name: '3 Months Pro',   scans: 3000,  price: 99.99,  type: 'pro'  },
-  pro6:         { name: '6 Months Pro',   scans: 6000,  price: 184.99, type: 'pro'  },
-  pro12:        { name: '12 Months Pro',  scans: 12000, price: 274.99, type: 'pro'  },
+  starter:      { name: 'Starter',       scans: 100,   price: 9.99,   type: 'scan', monthlyLimit: 0    },
+  builder:      { name: 'Builder',       scans: 200,   price: 18.99,  type: 'scan', monthlyLimit: 0    },
+  professional: { name: 'Professional',  scans: 300,   price: 27.99,  type: 'scan', monthlyLimit: 0    },
+  master:       { name: 'Master',        scans: 500,   price: 44.99,  type: 'scan', monthlyLimit: 0    },
+  pro3:         { name: '3 Months Pro',  scans: 3000,  price: 99.99,  type: 'pro',  monthlyLimit: 1000 },
+  pro6:         { name: '6 Months Pro',  scans: 6000,  price: 184.99, type: 'pro',  monthlyLimit: 1000 },
+  pro12:        { name: '12 Months Pro', scans: 12000, price: 274.99, type: 'pro',  monthlyLimit: 1000 },
 };
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -80,6 +89,12 @@ const PLANS = {
 ───────────────────────────────────────────────────────────────────── */
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'OPTIONS'] }));
 app.options('*', cors());
+// Allow iyzipay popup to communicate with parent window
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  next();
+});
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true })); // needed for iyzipay callback POST
 app.use(express.static('.'));
@@ -96,25 +111,50 @@ Your task is to:
   4. Return your findings ONLY as a valid JSON object — no extra text, no markdown fences.
 
 ERROR CODE TAXONOMY — assign the MOST SPECIFIC matching code:
-SP   : Spelling — word is misspelled
-SVA  : Subject-Verb Agreement — verb does not match subject number
-VT   : Verb Tense — wrong tense used
-ART  : Article — wrong/missing/extra article
-PREP : Preposition — wrong or missing preposition
-PL   : Plural/Singular — wrong noun number
-PRO  : Pronoun — wrong pronoun form
-WW   : Wrong Word — wrong word used entirely
-WF   : Word Form — wrong form of the correct root word
-WO   : Word Order — words in wrong position
-RUN  : Run-on or broken sentence structure
-P    : Punctuation — missing/wrong punctuation mark ONLY
+SP   : Spelling — word is misspelled (e.g., 'beatiful' -> 'beautiful')
+SVA  : Subject-Verb Agreement — verb does not match subject number (e.g., they 'is' -> there 'are' / they 'has' -> they 'have')
+GR   : Grammatical Errors — Grammatically wrong sentence or part (e.g., Somethings 'have' good -> Somethings 'are' good)
+T   : Verb Tense — wrong tense used (e.g., 'I go yesterday' -> 'I went yesterday')
+ART  : Article — wrong/missing/extra article (is only for 'a, an, the') (e.g., 'a apple' -> 'an apple')
+PREP : Preposition — wrong or missing preposition (e.g., 'depend to' -> 'depend on')
+PL   : Plural/Singular — wrong noun number (e.g., 'two book' -> 'two books')
+WW   : Wrong Word — wrong word used entirely (e.g., 'I did a mistake' -> 'I made a mistake')
+WF   : Word Form — wrong form of the correct root word (e.g., 'He speaks good' -> 'He speaks well' / 'Me name is Halil' -> 'My name is Halil')
+WO   : Word Order — words in wrong position (e.g., 'I and my friend tomorrow to the cinema will go' -> 'My friend and I will go to the cinema tomorrow')
+P    : Punctuation — missing/wrong punctuation mark ONLY (Missing or wrong dots, commas etc.)
 CAP  : Capitalization — wrong upper/lower case ONLY
+RW   : Rewrite — The sentence is so grammatically broken or confusing that it requires a complete rewrite to be understandable. (Use ONLY as a last resort).
 
 STRICT RULES:
-- P = punctuation marks ONLY. NEVER use P for grammar errors.
-- CAP = capitalization ONLY.
-- SVA = subject-verb number mismatch ONLY.
+- P = Strictly for marks (!.,:-). Do not use for grammar. (';' error is unnecessary, do not state it as an error, skip)
+- CAP = Strictly for upper/lower case issues.
+- SVA = Use ONLY for third-person singular/plural mismatches (e.g., 'She go', 'Something have', 'They is').
+- WW = Use if the word exists but the meaning is incorrect in context (e.g., 'I have 20 years old' instead of 'I am').
+- SP = Use ONLY for non-existent words (typos). If a word is spelled correctly but used wrongly (their vs. there), it is WW.
+- Analyze the text WORD-BY-WORD. Do not skip minor errors like missing -s or incorrect articles.
 - Pick the most specific code.
+- CRITICAL: Only identify errors if the word is ACTUALLY incorrect. 
+- Do NOT flag parts of a correct word (e.g., do NOT flag 'use' inside 'because' or 'useful'). 
+- If a word is common and correctly spelled in context, leave it alone.
+- Double-check the original transcription before flagging an error. If the student wrote 'because' correctly, marking 'use' inside it as SP is a hallucination and is STRICTLY FORBIDDEN.
+- Every 'wrong_word' in your JSON must be the EXACT string from the transcribed_text.
+- ZERO TOLERANCE FOR HALLUCINATIONS: Do NOT mark a word as incorrect if it is spelled correctly (e.g., 'successful', 'easier', 'responsibility', 'encouraging' are CORRECT. Marking them as SP or WF is a major failure).
+- VERIFY BEFORE FLAGGING: If a word is correctly transcribed and makes sense in the context, it IS NOT an error. Skip it.
+- PRECISE SP: Use SP only if the word is actually misspelled in the transcribed text. Do not invent spelling errors for correctly written words.
+- CONTEXTUAL INTEGRITY: 'People are their and entertainment' is a valid WW (should be 'there' or 'have their...'). Focus on actual logical or grammatical gaps like this, not on perfectly fine words.
+- DOUBLE-CHECK: If the 'wrong_word' and 'correction' are nearly identical, it is likely NOT an error.
+- DO NOT IMPROVE STYLE: Your goal is not to make the student sound better or more professional. Your goal is only to fix clear linguistic mistakes.
+- GRANULARITY: Mark only the specific word that is wrong. If the whole sentence is a disaster, mark the whole sentence and use RW (Rewrite).
+- WW vs RW: If the correction requires adding NEW information or NEW verbs that were not in the original text (like adding 'interested' or 'phones'), you MUST use RW and select the ENTIRE sentence. Never use WW for full-sentence structural changes.
+- HYPHEN ALERT: Missing hyphens in compound adjectives (e.g., 'face-to-face') are ALWAYS P. Using PREP for a missing hyphen is a CRITICAL ERROR.
+- STRICT FIDELITY: Do not play 'editor'. If the student wrote 'People are their', do not guess their hobbies. Either change 'their' to 'there' (WW) or mark the whole thing as RW. Never invent context like 'technology' or 'interested' if it's not written.
+
+FINAL SELF-CORRECTION STEP:
+Before finalizing the JSON, ask yourself:
+1. Did I add words that the student didn't write? If yes, is the category 'RW'? (If not, fix it).
+2. Is 'face to face' marked as 'P'? (If not, fix it).
+3. Is every flagged word actually an error? (If I'm correcting 'successful' or 'responsibility', DELETE that entry).
+
 
 REQUIRED JSON OUTPUT (return ONLY this structure, no extra text, no markdown):
 {
@@ -198,6 +238,19 @@ async function getOrCreateUser(firebaseUser) {
     user.lastLoginAt = new Date();
     await user.save();
   }
+  // Auto-reset monthly credits if reset date has passed and plan hasn't expired
+if (
+  user.monthlyLimit > 0 &&
+  user.monthlyResetDate &&
+  new Date() >= user.monthlyResetDate &&
+  user.planExpiry &&
+  new Date() < user.planExpiry
+) {
+  user.credits          = user.monthlyLimit;
+  user.monthlyResetDate = getNextMonthDate();
+  await user.save();
+  console.log(`[credits] Monthly reset for ${user.email} — credits restored to ${user.monthlyLimit}`);
+}
   return user;
 }
 
@@ -411,31 +464,59 @@ app.post('/api/payments/callback', async (req, res) => {
 
   iyzipay.checkoutForm.retrieve({ locale: Iyzipay.LOCALE.EN, token }, async (err, result) => {
     if (err || result.status !== 'success' || result.paymentStatus !== 'SUCCESS') {
-      console.error('[iyzipay] Payment failed:', err || result?.errorMessage);
+      console.error('[callback] Payment failed:', err || result?.errorMessage);
       return res.redirect(`${process.env.APP_URL || ''}/?payment=failed`);
     }
 
-    const conversationId = result.conversationId;
+    console.log('[callback] iyzipay result:', JSON.stringify({
+      status: result.status,
+      paymentStatus: result.paymentStatus,
+      conversationId: result.conversationId,
+      paymentId: result.paymentId,
+      token,
+    }));
 
     try {
-      const user = await User.findOne({ 'transactions._id': conversationId });
+      // Look up by iyzicoToken — reliable across all iyzipay environments
+      const user = await User.findOne({ 'transactions.iyzicoToken': token });
+
       if (!user) {
-        console.error('[callback] Transaction not found:', conversationId);
+        console.error('[callback] No user found for token:', token);
         return res.redirect(`${process.env.APP_URL || ''}/?payment=failed`);
       }
 
-      const tx = user.transactions.id(conversationId);
-      if (!tx || tx.status === 'success') {
-        /* Already processed — idempotency guard */
+      // Find the specific transaction by token
+      const tx = user.transactions.find(t => t.iyzicoToken === token);
+
+      if (!tx) {
+        console.error('[callback] Transaction not found for token:', token);
+        return res.redirect(`${process.env.APP_URL || ''}/?payment=failed`);
+      }
+
+      if (tx.status === 'success') {
+        // Already processed — idempotency guard
         return res.redirect(`${process.env.APP_URL || ''}/?payment=already`);
       }
 
       tx.status    = 'success';
       tx.paymentId = result.paymentId || '';
-      user.credits += tx.scansAdded;
+
+      // Handle monthly-limited pro plans vs one-time scan packs
+      const plan = PLANS[tx.planId];
+      if (plan && plan.type === 'pro') {
+        // Pro plan: set monthly allowance instead of dumping all scans at once
+        user.credits           = plan.monthlyLimit;
+        user.monthlyLimit      = plan.monthlyLimit;
+        user.monthlyResetDate  = getNextMonthDate();
+        user.planExpiry        = getPlanExpiry(tx.planId);
+      } else {
+        // One-time pack: add scans directly
+        user.credits += tx.scansAdded;
+      }
+
       await user.save();
 
-      console.log(`[iyzipay] Payment SUCCESS — user:${user.email} plan:${tx.planId} +${tx.scansAdded} scans`);
+      console.log(`[callback] SUCCESS — user:${user.email} plan:${tx.planId} credits now:${user.credits}`);
       return res.redirect(`${process.env.APP_URL || ''}/?payment=success&scans=${tx.scansAdded}`);
 
     } catch (dbErr) {
@@ -444,7 +525,6 @@ app.post('/api/payments/callback', async (req, res) => {
     }
   });
 });
-
 /* ═══════════════════════════════════════════════════════════════════
    ROUTE — Evaluate image  ★ MAIN ENDPOINT ★
    POST /api/evaluate
@@ -571,6 +651,113 @@ app.post('/api/reevaluate', verifyToken, async (req, res) => {
     return res.json(parsed);
   } catch (apiErr) {
     return res.status(500).json({ error: `AI error: ${apiErr.message}` });
+  }
+});
+
+function getNextMonthDate() {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return d;
+}
+
+function getPlanExpiry(planId) {
+  const months = { pro3: 3, pro6: 6, pro12: 12 };
+  const d = new Date();
+  d.setMonth(d.getMonth() + (months[planId] || 1));
+  return d;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ROUTE — Contact / Feedback / Support
+   POST /api/contact
+   Headers: Authorization: Bearer <idToken>
+   Body: { type: 'feedback'|'support', subject?: string, category?: string, message: string }
+═══════════════════════════════════════════════════════════════════ */
+app.post('/api/contact', verifyToken, async (req, res) => {
+  const { type, subject, category, message } = req.body;
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Message is required.' });
+  }
+
+  let user;
+  try { user = await getOrCreateUser(req.firebaseUser); }
+  catch (e) { return res.status(500).json({ error: 'Could not load user.' }); }
+
+  const userEmail   = user.email       || 'unknown@examlens.com';
+  const userName    = user.displayName || 'ExamLens User';
+  const isFeedback  = type === 'feedback';
+
+  // ── Email to ExamLens team ─────────────────────────────────────
+  const teamSubject = `[${type.toUpperCase()}] ${isFeedback ? subject || '(no subject)' : category || 'General'} | From: ${userEmail}`;
+
+  const teamBody = `
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+      <h2 style="color:#1b2a4a;border-bottom:2px solid #c9a84c;padding-bottom:8px;">
+        ExamLens ${isFeedback ? 'Feedback' : 'Support Request'}
+      </h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        <tr><td style="padding:6px 0;color:#666;width:120px;">From</td><td><strong>${userName}</strong> (${userEmail})</td></tr>
+        ${isFeedback
+          ? `<tr><td style="padding:6px 0;color:#666;">Subject</td><td>${subject || '—'}</td></tr>`
+          : `<tr><td style="padding:6px 0;color:#666;">Category</td><td>${category || '—'}</td></tr>`}
+      </table>
+      <div style="background:#f5f0e8;border-left:4px solid #c9a84c;padding:16px;border-radius:4px;">
+        <p style="margin:0;line-height:1.7;color:#3a2a0e;">${message.replace(/\n/g, '<br>')}</p>
+      </div>
+      <p style="margin-top:16px;font-size:12px;color:#999;">Sent via ExamLens Portal · ${new Date().toLocaleString()}</p>
+    </div>`;
+
+  // ── Auto-reply to user ─────────────────────────────────────────
+  const replySubject = isFeedback
+    ? `We received your feedback — ExamLens`
+    : `We received your support request — ExamLens`;
+
+  const userBody = `
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+      <h2 style="color:#1b2a4a;border-bottom:2px solid #c9a84c;padding-bottom:8px;">
+        Thank you, ${userName} 🎓
+      </h2>
+      <p style="color:#3a2a0e;line-height:1.7;">
+        We received your <strong>${type}</strong> request regarding
+        <strong>${isFeedback ? (subject || 'your feedback') : (category || 'your issue')}</strong>.
+        Our team will get back to you within <strong>24–48 hours</strong>.
+      </p>
+      <div style="background:#f5f0e8;border-left:4px solid #c9a84c;padding:16px;border-radius:4px;margin:20px 0;">
+        <p style="margin:0;font-size:13px;color:#7a5c2a;font-style:italic;">Your message:</p>
+        <p style="margin:8px 0 0;line-height:1.7;color:#3a2a0e;">${message.replace(/\n/g, '<br>')}</p>
+      </div>
+      <p style="color:#666;font-size:13px;">
+        If this is urgent, reply directly to this email.<br><br>
+        — The ExamLens Team<br>
+        <a href="mailto:support@examlens.app" style="color:#c9a84c;">support@examlens.app</a>
+      </p>
+    </div>`;
+
+  try {
+    // Send both emails in parallel — faster than sequential awaits
+    await Promise.all([
+      mailer.sendMail({
+        from:    `"ExamLens" <${process.env.GMAIL_USER}>`,
+        to:      'examlensapp@gmail.com',
+        replyTo: userEmail,                // ← click Reply goes straight to the user
+        subject: teamSubject,              // ← [FEEDBACK] Subject | From: user@email.com
+        html:    teamBody,
+      }),
+      mailer.sendMail({
+        from:    `"ExamLens Support" <${process.env.SUPPORT_EMAIL}>`,
+        to:      userEmail,
+        subject: replySubject,
+        html:    userBody,
+      }),
+    ]);
+
+    console.log(`[/api/contact] ${type} from ${userEmail} — both emails sent`);
+    return res.json({ success: true });
+
+  } catch (mailErr) {
+    console.error('[/api/contact] Mail error:', mailErr.message);
+    return res.status(500).json({ error: 'Could not send message. Please try again.' });
   }
 });
 

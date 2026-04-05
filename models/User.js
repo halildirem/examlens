@@ -52,7 +52,9 @@ const userSchema = new mongoose.Schema({
 
   /* Credits / Scans */
   credits: { type: Number, default: 5, min: 0 },
-
+  monthlyLimit:     { type: Number, default: 0   },  // 0 = no pro plan active
+  monthlyResetDate: { type: Date,   default: null },  // when credits refill
+  planExpiry:       { type: Date,   default: null },  // when pro plan ends
   /* History */
   evaluations:  { type: [evaluationSchema],  default: [] },
   transactions: { type: [transactionSchema], default: [] },
