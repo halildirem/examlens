@@ -43,25 +43,15 @@ const mailer = nodemailer.createTransport({
 /* ─────────────────────────────────────────────────────────────────────
    FIREBASE ADMIN!
 ───────────────────────────────────────────────────────────────────── */
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-} catch (e) {
-  console.error('[Firebase] FATAL: FIREBASE_SERVICE_ACCOUNT is not valid JSON.', e.message);
-  process.exit(1);
-}
-
-if (!serviceAccount.project_id) {
-  console.error('[Firebase] FATAL: FIREBASE_SERVICE_ACCOUNT missing. Add it in Render Environment tab.');
-  process.exit(1);
-}
-
+/* ─── FIREBASE ADMIN ─── */
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+  credential: admin.credential.cert({
+    projectId:   process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey:  (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+  }),
 });
-
-console.log(`[Firebase] Initialised — project: ${serviceAccount.project_id}`);
-
+console.log(`[Firebase] Initialised — project: ${process.env.FIREBASE_PROJECT_ID}`);
 /* ─────────────────────────────────────────────────────────────────────
    MONGODB
 ───────────────────────────────────────────────────────────────────── */
