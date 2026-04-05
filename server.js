@@ -41,7 +41,7 @@ const mailer = nodemailer.createTransport({
   },
 });
 /* ─────────────────────────────────────────────────────────────────────
-   FIREBASE ADMIN
+   FIREBASE ADMIN!
 ───────────────────────────────────────────────────────────────────── */
 
 // Debug — remove after confirming deploy works
