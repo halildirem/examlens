@@ -1,4 +1,4 @@
-**🔍 ExamLens – English Writing Paper Evaluator**
+##🔍 ExamLens – English Writing Paper Evaluator
 
 ExamLens is a full-stack SaaS application built to help English instructors and preparatory schools grade handwritten essays much faster. 
 Instead of checking papers manually for hours, teachers can take a photo of the student's essay, upload it, and instantly get a full digital 
@@ -9,8 +9,6 @@ I built this project to solve real-world problems in educational tech, focusing 
 **Live Link:** https://www.examlens.app
 
 ---
-
-📸 Project Screenshots
 
 ## 📸 Project Screenshots
 
@@ -36,7 +34,7 @@ I built this project to solve real-world problems in educational tech, focusing 
 
 ---
 
-💻 Tech Stack
+##💻 Tech Stack
 
 - **Frontend:** Vanilla JavaScript (ES6+), Semantic HTML5, CSS3 Custom Properties.
 - **Backend:** Node.js, Express.js
