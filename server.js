@@ -23,7 +23,7 @@ const express   = require('express');
 const cors      = require('cors');
 const mongoose  = require('mongoose');
 const admin     = require('firebase-admin');
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenAI } = require('@google/genai');
 const Iyzipay   = require('iyzipay');
 const pdfParse  = require('pdf-parse');
 const mammoth   = require('mammoth');
@@ -116,7 +116,7 @@ if (!SYSTEM_PROMPT) {
 /* ─────────────────────────────────────────────────────────────────────
    ANTHROPIC CLIENT
 ───────────────────────────────────────────────────────────────────── */
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /* ─────────────────────────────────────────────────────────────────────
    JSON EXTRACTOR — handles truncated / fence-wrapped AI responses
@@ -480,29 +480,60 @@ app.post('/api/evaluate', verifyToken, async (req, res) => {
   if (!image) return res.status(400).json({ error: 'No image data received.' });
 
   const ALLOWED = ['image/jpeg','image/jpg','image/png','image/webp','image/gif'];
-  const mime    = ALLOWED.includes(mimeType) ? mimeType : 'image/jpeg';
-  console.log(`[/api/evaluate] uid:${user.uid} | scans:${user.credits}`);
+  const mime     = ALLOWED.includes(mimeType) ? mimeType : 'image/jpeg';
+  console.log(`[/api/evaluate] uid:${user.uid} | Starting Two-Step Evaluation...`);
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5', max_tokens: 8192, system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: mime, data: image } },
-        { type: 'text',  text: 'Transcribe and grade this exam. Return only the JSON object.' },
-      ]}],
+    // ═══════════════════════════════════════════════════════════════════
+    // 1. AŞAMA: SADECE TRANSKRİPT ELDE ETME (Vision Modeli)
+    // ═══════════════════════════════════════════════════════════════════
+    const ocrResponse = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        { inlineData: { mimeType: mime, data: image } },
+        { text: SYSTEM_PROMPT },
+        { text: 'Read the image and output ONLY the transcribed_text field inside the standard JSON format. Do not evaluate errors yet.' }
+      ],
+      config: { responseMimeType: "application/json" }
     });
-    const rawText = response.content.filter(b => b.type==='text').map(b => b.text).join('');
-    let parsed;
-    try { parsed = extractJSON(rawText); }
-    catch (e) {
-      console.error('[/api/evaluate] Parse failed:', e.message);
-      return res.status(500).json({ error: 'The AI returned an unexpected format. Please try again.' });
+
+    let ocrParsed = extractJSON(ocrResponse.text);
+    const textToEvaluate = ocrParsed.transcribed_text;
+
+    if (!textToEvaluate) {
+      return res.status(500).json({ error: "Could not transcribe the image. Please try a clearer photo." });
     }
-    const remaining = await saveEvaluation(user, parsed);
-    parsed.credits = remaining;
-    return res.json(parsed);
+
+    console.log(`[/api/evaluate] Step 1 Complete. Text extracted. Starting Step 2 Deep Evaluation...`);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 2. AŞAMA: METİN ÜZERİNDEN DERİN SEVİYE HATA ANALİZİ (Text-Only Modeli)
+    // ═══════════════════════════════════════════════════════════════════
+    const evalResponse = await ai.models.generateContent({
+      model: 'gemini-2.5-flash', // Sadece metin okuduğu için artık %100 kapasiteyle çalışacak
+      contents: [
+        { text: SYSTEM_PROMPT },
+        { text: `Grade this text thoroughly. Find ALL grammar, spelling, punctuation, and missing word errors based on the rules. Return the full structured JSON object.\n\nText: ${textToEvaluate}` }
+      ],
+      config: { responseMimeType: "application/json" }
+    });
+
+    let finalParsed = extractJSON(evalResponse.text);
+    
+    // Güvenlik: Eğer ikinci aşama transkripti boş dönerse ilk aşamayı koru
+    if (!finalParsed.transcribed_text) {
+      finalParsed.transcribed_text = textToEvaluate;
+    }
+
+    // Krediyi düş ve veritabanına kaydet
+    const remaining = await saveEvaluation(user, finalParsed);
+    finalParsed.credits = remaining;
+    
+    console.log(`[/api/evaluate] Success! Two-Step analysis deployed to frontend.`);
+    return res.json(finalParsed);
+
   } catch (apiErr) {
-    console.error('[/api/evaluate] AI error:', apiErr);
+    console.error('[/api/evaluate] Two-Step Pipeline Error:', apiErr);
     return res.status(500).json({ error: `AI error: ${apiErr.message}` });
   }
 });
@@ -542,11 +573,19 @@ app.post('/api/evaluate-document', verifyToken, async (req, res) => {
   if (extractedText.length > 12000) extractedText = extractedText.slice(0, 12000);
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5', max_tokens: 8192, system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `Grade this student text. Return only the JSON object.\n\n--- STUDENT TEXT ---\n${extractedText}\n--- END ---` }],
+    // --- GEMINI API INTEGRATION ---
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        { text: SYSTEM_PROMPT },
+        { text: `Grade this student text. Return only the JSON object.\n\n--- STUDENT TEXT ---\n${extractedText}\n--- END ---` }
+      ],
+      config: {
+        responseMimeType: "application/json"
+      }
     });
-    const rawText = response.content.filter(b => b.type==='text').map(b => b.text).join('');
+
+    const rawText = response.text;
     let parsed;
     try { parsed = extractJSON(rawText); }
     catch (e) { return res.status(500).json({ error: 'The AI returned an unexpected format. Please try again.' }); }
@@ -568,43 +607,44 @@ app.post('/api/reevaluate', verifyToken, async (req, res) => {
   try { user = await getOrCreateUser(req.firebaseUser); }
   catch (e) { return res.status(500).json({ error: 'Could not load user account.' }); }
 
-  if (user.credits <= 0)
-    return res.status(403).json({ error: 'You have run out of Scans. Please purchase more to continue.', credits: 0 });
+  // NOT: Kullanıcının hiç kredisi yoksa bile re-evaluate yapabilsin diye bu kontrolü esnetebiliriz, 
+  // ama sıfırın altına düşmesin diye güvenlik amaçlı sadece mevcut kredisini frontend'e geri basacağız.
 
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'No text received.' });
   if (text.length > 12000)   return res.status(400).json({ error: 'Text too long (max 12,000 characters).' });
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001', max_tokens: 8192, system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `Grade this student text. Return only the JSON object.\n\n--- STUDENT TEXT ---\n${text}\n--- END ---` }],
+    // --- GEMINI API INTEGRATION ---
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        { text: SYSTEM_PROMPT },
+        { text: `Grade this student text. Return only the JSON object.\n\n--- STUDENT TEXT ---\n${text}\n--- END ---` }
+      ],
+      config: {
+        responseMimeType: "application/json"
+      }
     });
-    const rawText = response.content.filter(b => b.type==='text').map(b => b.text).join('');
+
+    const rawText = response.text;
     let parsed;
     try { parsed = extractJSON(rawText); }
     catch (e) { return res.status(500).json({ error: 'Unexpected format. Please try again.' }); }
+    
     parsed.transcribed_text = text;
-    const remaining = await saveEvaluation(user, parsed);
-    parsed.credits = remaining;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CRITICAL CHANGE: saveEvaluation fonksiyonunu ÇAĞIRMIYORUZ!
+    // Kullanıcının kredisini düşürmüyoruz, mevcut kredisini aynen koruyoruz.
+    // ═══════════════════════════════════════════════════════════════════
+    parsed.credits = user.credits; // Mevcut krediyi frontend panik yapmasın diye objeye ekle
+    
     return res.json(parsed);
   } catch (apiErr) {
     return res.status(500).json({ error: `AI error: ${apiErr.message}` });
   }
 });
-
-function getNextMonthDate() {
-  const d = new Date();
-  d.setMonth(d.getMonth() + 1);
-  return d;
-}
-
-function getPlanExpiry(planId) {
-  const months = { pro3: 3, pro6: 6, pro12: 12 };
-  const d = new Date();
-  d.setMonth(d.getMonth() + (months[planId] || 1));
-  return d;
-}
 
 /* ═══════════════════════════════════════════════════════════════════
    ROUTE — Contact / Feedback / Support
@@ -707,7 +747,7 @@ app.listen(PORT, () => {
   console.log(`\n╔══════════════════════════════════════╗`);
   console.log(`║  ExamLens v3.0  http://localhost:${PORT}  ║`);
   console.log(`╚══════════════════════════════════════╝\n`);
-  console.log(`  Anthropic   : ${process.env.ANTHROPIC_API_KEY    ? '✅' : '❌ MISSING'}`);
+  console.log(`  Gemini      : ${process.env.GEMINI_API_KEY      ? '✅' : '❌ MISSING'}`);
   console.log(`  MongoDB     : ${process.env.MONGODB_URI          ? '✅' : '❌ MISSING'}`);
   console.log(`  Firebase    : ${process.env.FIREBASE_PROJECT_ID  ? '✅' : '❌ MISSING'}`);
   console.log(`  Iyzico      : ${process.env.IYZICO_API_KEY       ? '✅' : '❌ MISSING'}`);

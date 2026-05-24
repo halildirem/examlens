@@ -971,58 +971,85 @@ function closeMobileNav() {
   dropZone.addEventListener('drop',      e  => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]); });
 
   /* ── GRADING ── */
-  async function submitForGrading() {
-    if (!currentImageBase64 || !currentImageFile) return;
-    setView('loading'); animateLoadingSteps();
-    const isImage = currentImageFile.type.startsWith('image/');
-    try {
-      const token    = await getIdToken();
-      const endpoint = isImage ? '/api/evaluate' : '/api/evaluate-document';
-      const body     = isImage
-        ? { image: currentImageBase64, mimeType: 'image/jpeg' }
-        : { fileData: currentImageBase64, mimeType: currentImageFile.type, fileName: currentImageFile.name };
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server error: ${res.status}`); }
-      const data = await res.json();
-      if (data.credits !== undefined) { updateScansUI(data.credits); loadHistory(); }
-      renderResults(data);
-    } catch(err) {
-      console.error(err);
-      setView('upload');
-      if (err.message.includes('out of Scans') || err.message.includes('credits')) openModal('pricing-modal');
-      showErrorBanner(err.message);
-    }
-  }
+async function submitForGrading() {
+  if (!currentImageBase64 || !currentImageFile) return;
+  setView('loading'); animateLoadingSteps();
+  const isImage = currentImageFile.type.startsWith('image/');
+  try {
+    const token    = await getIdToken();
+    const endpoint = isImage ? '/api/evaluate' : '/api/evaluate-document';
+    const body     = isImage
+      ? { image: currentImageBase64, mimeType: 'image/jpeg' }
+      : { fileData: currentImageBase64, mimeType: currentImageFile.type, fileName: currentImageFile.name };
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server error: ${res.status}`); }
+    const data = await res.json();
+    if (data.credits !== undefined) { updateScansUI(data.credits); loadHistory(); }
+    
+    renderResults(data);
+    
+    // 🎯 İŞTE TAM BURAYA EKLEDİK MORUK:
+    reEvalCount = 0; // Yeni kağıt başarıyla yüklendi, uyanıklık sayacını sıfırla!
 
-  async function submitRegrade() {
+  } catch(err) {
+    console.error(err);
+    setView('upload');
+    if (err.message.includes('out of Scans') || err.message.includes('credits')) openModal('pricing-modal');
+    showErrorBanner(err.message);
+  }
+}
+
+// 1. ADIM: Sayacı fonksiyonun TAMAMEN DIŞINDA tanımlıyoruz (Global değişken gibi yukarıda dursun)
+let reEvalCount = 0;
+
+async function submitRegrade() {
     const text = document.getElementById('editable-transcription').value.trim();
     if (!text) { alert('Text area is empty.'); return; }
+    
     const btn = document.getElementById('regrade-btn');
     btn.disabled = true; btn.classList.add('loading');
+    
+    // 2. ADIM: Butona her basıldığında sayacı 1 artırıyoruz
+    reEvalCount++; 
+    
     try {
       const token = await getIdToken();
       const res   = await fetch('/api/reevaluate', {
         method: 'POST',
         headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ text }),
+        // 3. ADIM: Backend'e artık text ile birlikte kaçıncı deneme olduğunu da paketleyip atıyoruz
+        body: JSON.stringify({ text, attempt: reEvalCount }), 
       });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server error: ${res.status}`); }
+      
+      if (!res.ok) { 
+        // Eğer backend kredi yetersiz diye 403 fırlatırsa veya hata verirse, 
+        // sayacı eski haline getiriyoruz ki hakkı yanmasın
+        reEvalCount--;
+        const e = await res.json().catch(() => ({})); 
+        throw new Error(e.error || `Server error: ${res.status}`); 
+      }
+      
       const data = await res.json();
+      
+      // Senin kodun zaten kredi güncellemeyi (updateScansUI) otomatik yapıyormuş, burası harika!
       if (data.credits !== undefined) { updateScansUI(data.credits); loadHistory(); }
       renderResults(data);
-    } catch(err) { alert(`Re-evaluation failed: ${err.message}`); }
-    finally { btn.disabled = false; btn.classList.remove('loading'); }
-  }
+    } catch(err) { 
+      alert(`Re-evaluation failed: ${err.message}`); 
+    } finally { 
+      btn.disabled = false; btn.classList.remove('loading'); 
+    }
+}
 
-  function animateLoadingSteps() {
-    [['lstep-2',1500],['lstep-3',3400],['lstep-4',6000]].forEach(([id,d]) => {
-      setTimeout(() => { const el = document.getElementById(id); if (el) el.classList.add('active'); }, d);
-    });
-  }
+function animateLoadingSteps() {
+  [['lstep-2',1500],['lstep-3',3400],['lstep-4',6000]].forEach(([id,d]) => {
+    setTimeout(() => { const el = document.getElementById(id); if (el) el.classList.add('active'); }, d);
+  });
+}
 
   /* ── RENDER RESULTS ── */
   function renderResults(data) {
