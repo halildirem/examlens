@@ -243,8 +243,18 @@
       <div class="brand-name nav-brand-name"><span class="brand-exam">EXAM</span><span class="brand-lens">LENS</span></div>
     </a>
     <a class="nav-about-link" href="./about.html">About Us</a>
-<a class="nav-about-link" onclick="openModal('feedback-modal')" style="cursor:pointer;">Feedback</a>
-<a class="nav-about-link" onclick="openModal('support-modal')" style="cursor:pointer;">Contact Support</a>
+<a class="nav-about-link" onclick="openModal('feedback-modal')">Feedback</a>
+<a class="nav-about-link" onclick="openModal('support-modal')">Contact Support</a>
+
+<!-- Mobile-only arrow menu -->
+<button class="mobile-nav-toggle" id="mobile-nav-toggle" onclick="toggleMobileNav()">
+  <span id="mobile-nav-arrow">›</span>
+</button>
+<div class="mobile-nav-menu" id="mobile-nav-menu">
+  <a class="mobile-nav-item" href="./about.html">📖 About Us</a>
+  <button class="mobile-nav-item" onclick="openModal('feedback-modal'); closeMobileNav();">💬 Feedback</button>
+  <button class="mobile-nav-item" onclick="openModal('support-modal'); closeMobileNav();">🎧 Contact Support</button>
+</div>
     <div class="nav-spacer"></div>
 
     <!-- Scans badge -->
@@ -285,7 +295,14 @@
     <div class="sidebar-list" id="sidebar-list">
       <div class="sidebar-empty"><span class="sidebar-empty-icon">📋</span>No evaluations yet.<br>Evaluate a paper to see history here.</div>
     </div>
-    <div class="sidebar-footer">History saved to your account</div>
+    <div class="sidebar-footer">
+  <div class="sidebar-mobile-nav">
+    <a href="./about.html">📖 About Us</a>
+    <button onclick="openModal('feedback-modal'); closeSidebar();">💬 Feedback</button>
+    <button onclick="openModal('support-modal'); closeSidebar();">🎧 Contact Support</button>
+  </div>
+  <span style="font-size:.68rem;color:var(--ivory-dim);text-align:center;">History saved to your account</span>
+</div>
   </aside>
 
   <!-- APP BODY -->
@@ -645,6 +662,17 @@
     document.getElementById('sidebar-overlay').style.display = 'none';
   }
 
+  /* ── MOBILE NAV ARROW ── */
+function toggleMobileNav() {
+  const menu  = document.getElementById('mobile-nav-menu');
+  const arrow = document.getElementById('mobile-nav-arrow');
+  const isOpen = menu.classList.toggle('open');
+  arrow.style.transform = isOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+}
+function closeMobileNav() {
+  document.getElementById('mobile-nav-menu').classList.remove('open');
+  document.getElementById('mobile-nav-arrow').style.transform = 'rotate(0deg)';
+}
   /* ── USER MENU ── */
   function toggleUserMenu() { document.getElementById('user-menu-wrap').classList.toggle('open'); }
   function closeUserMenu()  { document.getElementById('user-menu-wrap').classList.remove('open'); }
@@ -1060,34 +1088,55 @@
   }
 
   function buildHighlightedHTML(text, errors) {
-    if (!text) return '';
-    if (!errors || errors.length === 0) return escHtml(text).replace(/\n/g, '<br>');
-    const markers = [], used = [];
-    errors.forEach(err => {
-      const word = (err.wrong_word || '').trim();
-      if (!word) return;
-      let from = 0;
-      while (from < text.length) {
-        const idx = text.indexOf(word, from);
-        if (idx === -1) break;
-        const end = idx + word.length;
-        if (!used.some(r => idx < r.end && end > r.start)) {
-          markers.push({ start: idx, end, code: err.error_code || 'ERR' });
-          used.push({ start: idx, end });
-        }
-        from = idx + 1;
-      }
-    });
-    markers.sort((a, b) => a.start - b.start);
-    let html = '', cursor = 0;
-    markers.forEach(({ start, end, code }) => {
-      html += escHtml(text.slice(cursor, start)).replace(/\n/g, '<br>');
-      html += `<span class="error-highlight" data-code="${escHtml(code)}">${escHtml(text.slice(start, end))}</span>`;
-      cursor = end;
-    });
-    html += escHtml(text.slice(cursor)).replace(/\n/g, '<br>');
-    return html;
-  }
+  if (!text) return '';
+  if (!errors || errors.length === 0) return escHtml(text).replace(/\n/g, '<br>');
+
+  let markers = [];
+  let currentCursor = 0;
+
+  // 1. ADIM: Hataları metin akışına göre ardışık (sequential) olarak bul
+  errors.forEach(err => {
+    const word = (err.wrong_word || '');
+    if (!word) return;
+
+    // Aramayı her seferinde en baştan değil, en son kaldığımız yerden (currentCursor) ileriye doğru yapıyoruz
+    let idx = text.indexOf(word, currentCursor);
+    
+    // Eğer Claude nadiren de olsa sırayı kaçırdıysa, güvenlik önlemi olarak tüm metne bak
+    if (idx === -1) {
+      idx = text.indexOf(word, 0);
+    }
+
+    if (idx !== -1) {
+      let end = idx + word.length;
+      markers.push({ start: idx, end: end, code: err.error_code || 'ERR' });
+      // İmleci bu eşleşmenin sonuna çekiyoruz ki bir sonraki hata bir sonraki kelimede aransın
+      currentCursor = end;
+    }
+  });
+
+  // 2. ADIM: Olası iç içe geçmeleri (overlapping) engelle ve HTML yapısını koru
+  markers.sort((a, b) => a.start - b.start || (b.end - a.end));
+
+  let filteredMarkers = [];
+  let lastEnd = 0;
+  markers.forEach(m => {
+    if (m.start >= lastEnd) {
+      filteredMarkers.push(m);
+      lastEnd = m.end;
+    }
+  });
+
+  // 3. ADIM: HTML Çıktısını Güvenli Bir Şekilde İnşa Et
+  let html = '', cursor = 0;
+  filteredMarkers.forEach(({ start, end, code }) => {
+    html += escHtml(text.slice(cursor, start)).replace(/\n/g, '<br>');
+    html += `<span class="error-highlight" data-code="${escHtml(code)}">${escHtml(text.slice(start, end))}</span>`;
+    cursor = end;
+  });
+  html += escHtml(text.slice(cursor)).replace(/\n/g, '<br>');
+  return html;
+}
 
   function switchTab(tab) {
     const isA = tab === 'annotated';
