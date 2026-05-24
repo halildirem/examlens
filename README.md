@@ -12,18 +12,19 @@ I built this project to solve real-world problems in educational tech, focusing 
 
 📸 Project Screenshots
 
-**[LogIn]**
-assets/images/projectss/dashboard.png
+## 📸 Project Screenshots
 
-[Upload Screen]
-assets/images/projectss/insite.png
+| 1. Login Screen | 2. Upload Dashboard |
+|---|---|
+| ![Login](assets/images/projectss/dashboard.png) | ![Upload Screen](assets/images/projectss/insite.png) |
 
-[Evaluating Process]
-assets/images/projectss/evaluating.png
+| 3. Evaluating Process | 4. Evaluation Steps |
+|---|---|
+| ![Evaluating Process](assets/images/projectss/evaluating.png) | ![Evaluation Step](assets/images/projectss/evaluated.png) |
 
-[Evaluation Step]
-assets/images/projectss/evaluated.png
-assets/images/projectss/evaluated2.png
+| 5. Detailed Annotation |
+|---|
+| ![Evaluation Step 2](assets/images/projectss/evaluated2.png) |
 
 ---
 
