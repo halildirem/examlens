@@ -20,6 +20,7 @@
 require('dotenv').config();
 
 const express   = require('express');
+const path      = require('path');
 const cors      = require('cors');
 const mongoose  = require('mongoose');
 const admin     = require('firebase-admin');
@@ -97,7 +98,10 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true })); // needed for iyzipay callback POST
-app.use(express.static('.'));
+
+// Site isn't publicly launched yet — only the coming-soon page and its
+// image assets are exposed. No app pages or project files are servable.
+app.use('/assets/images', express.static(path.join(__dirname, 'assets/images')));
 
 /* ─────────────────────────────────────────────────────────────────────
    SYSTEM PROMPT
@@ -739,6 +743,10 @@ app.post('/api/contact', verifyToken, async (req, res) => {
     return res.status(500).json({ error: 'Could not send message. Please try again.' });
   }
 });
+
+// Catch-all: any page request that isn't an /api/* route above gets the
+// coming-soon page — index.html, about.html, etc. are never served directly.
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'coming-soon.html')));
 
 /* ─────────────────────────────────────────────────────────────────────
    START
