@@ -67,9 +67,9 @@ mongoose.connect(process.env.MONGODB_URI, {
    IYZIPAY CLIENT
 ───────────────────────────────────────────────────────────────────── */
 const iyzipay = new Iyzipay({
-  apiKey:    'sandbox-9Y0h8ntSeIrKuR1JF2EwoB0Hf6ryLCIR'    || '',
-  secretKey: 'sandbox-pZ4PLDrKH0a8pk6B95pFyFDFb9hFCXps' || '',
-  uri:       'https://sandbox-api.iyzipay.com',
+  apiKey:    process.env.IYZICO_API_KEY    || '',
+  secretKey: process.env.IYZICO_SECRET_KEY || '',
+  uri:       process.env.IYZICO_BASE_URL   || 'https://sandbox-api.iyzipay.com',
 });
 
 /* ─────────────────────────────────────────────────────────────────────
