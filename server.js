@@ -101,7 +101,14 @@ app.use(express.urlencoded({ extended: true })); // needed for iyzipay callback 
 
 // Site isn't publicly launched yet — only the coming-soon page and its
 // image assets are exposed. No app pages or project files are servable.
-app.use('/assets/images', express.static(path.join(__dirname, 'assets/images')));
+// Set COMING_SOON_MODE=false in your local .env to browse the full app.
+const COMING_SOON = process.env.COMING_SOON_MODE !== 'false';
+
+if (COMING_SOON) {
+  app.use('/assets/images', express.static(path.join(__dirname, 'assets/images')));
+} else {
+  app.use(express.static('.'));
+}
 
 /* ─────────────────────────────────────────────────────────────────────
    SYSTEM PROMPT
@@ -746,7 +753,9 @@ app.post('/api/contact', verifyToken, async (req, res) => {
 
 // Catch-all: any page request that isn't an /api/* route above gets the
 // coming-soon page — index.html, about.html, etc. are never served directly.
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'coming-soon.html')));
+if (COMING_SOON) {
+  app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'coming-soon.html')));
+}
 
 /* ─────────────────────────────────────────────────────────────────────
    START
