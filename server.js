@@ -130,6 +130,35 @@ if (!SYSTEM_PROMPT) {
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /* ─────────────────────────────────────────────────────────────────────
+   GEMINI RETRY WRAPPER — Gemini occasionally returns 503 UNAVAILABLE
+   during demand spikes on Google's end. These are transient, so we
+   retry a couple of times with backoff before giving up, and if it
+   still fails we show the user a kind message instead of raw API text.
+───────────────────────────────────────────────────────────────────── */
+function isTransientAiError(err) {
+  return err?.status === 503 || /UNAVAILABLE|overloaded|high demand/i.test(err?.message || '');
+}
+
+async function generateContentWithRetry(params, retries = 2, delayMs = 900) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (err) {
+      if (attempt >= retries || !isTransientAiError(err)) throw err;
+      console.warn(`[Gemini] Busy (attempt ${attempt + 1}/${retries + 1}) — retrying in ${delayMs}ms...`);
+      await new Promise(r => setTimeout(r, delayMs));
+      delayMs *= 2; // exponential backoff
+    }
+  }
+}
+
+function friendlyAiError(err) {
+  return isTransientAiError(err)
+    ? "Our AI service is experiencing high demand right now. Please wait a moment and try again."
+    : `AI error: ${err.message}`;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
    JSON EXTRACTOR — handles truncated / fence-wrapped AI responses
 ───────────────────────────────────────────────────────────────────── */
 function extractJSON(raw) {
@@ -275,7 +304,7 @@ app.get('/api/history', verifyToken, async (req, res) => {
     const user = await User.findOne({ uid: req.firebaseUser.uid }).select('evaluations').lean();
     if (!user) return res.json({ evaluations: [] });
     const list = (user.evaluations || []).map(e => ({
-      id: e._id, summary: e.summary, totalErrors: e.totalErrors, createdAt: e.createdAt,
+      id: e._id, title: e.title || '', summary: e.summary, totalErrors: e.totalErrors, createdAt: e.createdAt,
     }));
     return res.json({ evaluations: list });
   } catch (e) {
@@ -292,6 +321,32 @@ app.get('/api/history/:id', verifyToken, async (req, res) => {
     return res.json({ evaluation });
   } catch (e) {
     return res.status(500).json({ error: 'Could not load evaluation.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   ROUTE — Rename a saved evaluation
+   PUT /api/history/:id/rename
+   Body: { title: string }
+═══════════════════════════════════════════════════════════════════ */
+app.put('/api/history/:id/rename', verifyToken, async (req, res) => {
+  try {
+    const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
+    if (!title) return res.status(400).json({ error: 'Title is required.' });
+    if (title.length > 120) return res.status(400).json({ error: 'Title must be 120 characters or fewer.' });
+
+    const user = await User.findOne({ uid: req.firebaseUser.uid });
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const evaluation = user.evaluations.id(req.params.id);
+    if (!evaluation) return res.status(404).json({ error: 'Evaluation not found.' });
+
+    evaluation.title = title;
+    await user.save();
+    return res.json({ success: true, id: evaluation._id, title: evaluation.title });
+  } catch (e) {
+    console.error('[/api/history/:id/rename]', e);
+    return res.status(500).json({ error: 'Could not rename evaluation.' });
   }
 });
 
@@ -498,7 +553,7 @@ app.post('/api/evaluate', verifyToken, async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════
     // 1. AŞAMA: SADECE TRANSKRİPT ELDE ETME (Vision Modeli)
     // ═══════════════════════════════════════════════════════════════════
-    const ocrResponse = await ai.models.generateContent({
+    const ocrResponse = await generateContentWithRetry({
       model: 'gemini-2.5-flash',
       contents: [
         { inlineData: { mimeType: mime, data: image } },
@@ -520,7 +575,7 @@ app.post('/api/evaluate', verifyToken, async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════
     // 2. AŞAMA: METİN ÜZERİNDEN DERİN SEVİYE HATA ANALİZİ (Text-Only Modeli)
     // ═══════════════════════════════════════════════════════════════════
-    const evalResponse = await ai.models.generateContent({
+    const evalResponse = await generateContentWithRetry({
       model: 'gemini-2.5-flash', // Sadece metin okuduğu için artık %100 kapasiteyle çalışacak
       contents: [
         { text: SYSTEM_PROMPT },
@@ -545,7 +600,7 @@ app.post('/api/evaluate', verifyToken, async (req, res) => {
 
   } catch (apiErr) {
     console.error('[/api/evaluate] Two-Step Pipeline Error:', apiErr);
-    return res.status(500).json({ error: `AI error: ${apiErr.message}` });
+    return res.status(isTransientAiError(apiErr) ? 503 : 500).json({ error: friendlyAiError(apiErr) });
   }
 });
 
@@ -585,7 +640,7 @@ app.post('/api/evaluate-document', verifyToken, async (req, res) => {
 
   try {
     // --- GEMINI API INTEGRATION ---
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-2.5-flash',
       contents: [
         { text: SYSTEM_PROMPT },
@@ -605,7 +660,8 @@ app.post('/api/evaluate-document', verifyToken, async (req, res) => {
     parsed.credits = remaining;
     return res.json(parsed);
   } catch (apiErr) {
-    return res.status(500).json({ error: `AI error: ${apiErr.message}` });
+    console.error('[/api/evaluate-document] AI error:', apiErr);
+    return res.status(isTransientAiError(apiErr) ? 503 : 500).json({ error: friendlyAiError(apiErr) });
   }
 });
 
@@ -618,16 +674,21 @@ app.post('/api/reevaluate', verifyToken, async (req, res) => {
   try { user = await getOrCreateUser(req.firebaseUser); }
   catch (e) { return res.status(500).json({ error: 'Could not load user account.' }); }
 
-  // NOT: Kullanıcının hiç kredisi yoksa bile re-evaluate yapabilsin diye bu kontrolü esnetebiliriz, 
-  // ama sıfırın altına düşmesin diye güvenlik amaçlı sadece mevcut kredisini frontend'e geri basacağız.
-
-  const { text } = req.body;
+  const { text, attempt } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'No text received.' });
   if (text.length > 12000)   return res.status(400).json({ error: 'Text too long (max 12,000 characters).' });
 
+  // First re-evaluation of a paper is free; every one after that costs 1 scan.
+  // `attempt` is a per-session counter the frontend sends (1 = first re-eval),
+  // reset whenever the user starts a new evaluation.
+  const isFreeReeval = Number(attempt) <= 1;
+
+  if (!isFreeReeval && user.credits <= 0)
+    return res.status(403).json({ error: 'You have run out of Scans. Please purchase more to continue.', credits: 0 });
+
   try {
     // --- GEMINI API INTEGRATION ---
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-2.5-flash',
       contents: [
         { text: SYSTEM_PROMPT },
@@ -642,18 +703,21 @@ app.post('/api/reevaluate', verifyToken, async (req, res) => {
     let parsed;
     try { parsed = extractJSON(rawText); }
     catch (e) { return res.status(500).json({ error: 'Unexpected format. Please try again.' }); }
-    
+
     parsed.transcribed_text = text;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // CRITICAL CHANGE: saveEvaluation fonksiyonunu ÇAĞIRMIYORUZ!
-    // Kullanıcının kredisini düşürmüyoruz, mevcut kredisini aynen koruyoruz.
-    // ═══════════════════════════════════════════════════════════════════
-    parsed.credits = user.credits; // Mevcut krediyi frontend panik yapmasın diye objeye ekle
-    
+    // First re-eval of a paper is free (no credit deducted). From the 2nd
+    // re-eval of the same paper onward, deduct 1 scan like a normal evaluation.
+    if (!isFreeReeval) {
+      user.credits = Math.max(0, user.credits - 1);
+      await user.save();
+    }
+    parsed.credits = user.credits;
+
     return res.json(parsed);
   } catch (apiErr) {
-    return res.status(500).json({ error: `AI error: ${apiErr.message}` });
+    console.error('[/api/reevaluate] AI error:', apiErr);
+    return res.status(isTransientAiError(apiErr) ? 503 : 500).json({ error: friendlyAiError(apiErr) });
   }
 });
 

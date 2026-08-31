@@ -24,6 +24,7 @@ const transactionSchema = new mongoose.Schema({
 
 /* ── Evaluation sub-document ─────────────────────────────────── */
 const evaluationSchema = new mongoose.Schema({
+  title:           { type: String, default: '' },   // user-editable display name
   transcribedText: { type: String, default: '' },
   errors: [{
     error_code: { type: String, default: '' },

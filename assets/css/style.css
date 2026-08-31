@@ -187,6 +187,13 @@ body {
 .history-item      { padding: 11px 16px; border-bottom: 1px solid rgba(38,61,92,.45); cursor: pointer; transition: background var(--tr); }
 .history-item:hover { background: var(--navy-hover); }
 .history-item-title { font-size: .79rem; font-weight: 500; color: var(--ivory); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.history-item-title-row { display: flex; align-items: center; gap: 6px; }
+.history-item-title-row .history-item-title { flex: 1; min-width: 0; margin-bottom: 0; }
+.history-item-title-row { margin-bottom: 4px; }
+.history-rename-btn { flex-shrink: 0; background: transparent; border: none; color: var(--ivory-dim); font-size: .72rem; line-height: 1; cursor: pointer; padding: 3px 5px; border-radius: 4px; opacity: 0; transition: opacity var(--tr), color var(--tr), background var(--tr); }
+.history-item:hover .history-rename-btn { opacity: 1; }
+.history-rename-btn:hover { color: var(--gold); background: var(--gold-glow); }
+.history-rename-input { width: 100%; background: var(--navy); border: 1px solid var(--gold); border-radius: 4px; padding: 1px 6px; color: var(--ivory); font-family: var(--font-body); font-size: .79rem; font-weight: 500; outline: none; box-shadow: 0 0 0 2px var(--gold-glow); }
 .history-item-meta  { display: flex; align-items: center; gap: 8px; }
 .history-item-date  { font-size: .68rem; color: var(--ivory-dim); font-weight: 300; }
 .history-err-badge  { font-family: var(--font-mono); font-size: .62rem; font-weight: 600; background: rgba(217,95,95,.1); border: 1px solid rgba(217,95,95,.22); color: var(--red-err); padding: 1px 5px; border-radius: 4px; }
@@ -199,8 +206,29 @@ body {
 .sidebar-footer-note { font-size: .68rem; color: var(--ivory-dim); text-align: center; display: block; font-weight: 300; }
 .sidebar-overlay    { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.42); z-index: 140; }
 
+/* ── APP CONTENT ROW (error guide + main content) ── */
+.app-content-row { display: flex; align-items: flex-start; justify-content: center; gap: 28px; flex: 1; width: 100%; padding: 0 16px; }
+
+/* ── ERROR CODE GUIDE (persistent desktop panel) ── */
+.error-guide       { position: sticky; top: calc(var(--navbar-h) + 24px); flex-shrink: 0; width: 260px; margin-top: 44px; background: var(--navy-mid); border: 1px solid var(--navy-border); border-radius: var(--radius-lg); padding: 18px 18px; box-shadow: var(--shadow-sm); max-height: calc(100vh - var(--navbar-h) - 48px); overflow-y: auto; }
+.error-guide-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; color: var(--ivory); margin-bottom: 12px; letter-spacing: .02em; }
+.error-guide-title span { color: var(--gold); font-style: italic; }
+.error-guide-list  { display: flex; flex-direction: column; gap: 9px; }
+.error-guide-item  { display: flex; gap: 9px; align-items: flex-start; }
+.error-guide-code  { font-family: var(--font-mono); font-size: .64rem; font-weight: 700; background: var(--gold-glow); border: 1px solid rgba(201,168,76,.32); color: var(--gold); padding: 2px 6px; border-radius: 5px; flex-shrink: 0; white-space: nowrap; min-width: 38px; text-align: center; margin-top: 1px; }
+.error-guide-text  { font-size: .76rem; color: var(--ivory-dim); font-weight: 300; line-height: 1.42; }
+.error-guide-text strong { color: var(--ivory); font-weight: 500; }
+
+/* ── ERROR CODES BUTTON (tablet/mobile trigger for the modal) ──
+   Sits in normal document flow (see markup) and sticks near the bottom
+   of the viewport while its column scrolls by, coming to rest just
+   above the footer — it never has to overlap the footer to avoid it. */
+.error-codes-fab { display: none; position: sticky; bottom: 20px; left: auto; align-self: flex-start; margin: 20px 0 0 18px; z-index: 130; align-items: center; gap: 8px; background: var(--navy-mid); border: 1px solid var(--gold); color: var(--gold); border-radius: 24px; padding: 11px 18px; font-family: var(--font-body); font-size: .82rem; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); transition: background-color var(--tr), transform var(--tr); }
+.error-codes-fab:hover { background: var(--gold-glow); transform: translateY(-1px); }
+#error-codes-modal .modal-box { max-width: 480px; }
+
 /* ── MAIN CONTENT ── */
-.main-content   { max-width: 720px; margin: 0 auto; padding: 44px 28px 60px; flex: 1; }
+.main-content   { max-width: 820px; margin: 0 auto; padding: 44px 32px 60px; flex: 1; width: 100%; }
 .page-header    { margin-bottom: 36px; }
 .page-header h1 { font-family: var(--font-display); font-size: clamp(2rem,4vw,2.7rem); font-weight: 700; color: var(--ivory); line-height: 1.15; margin-bottom: 9px; }
 .page-header h1 em { font-style: italic; color: var(--gold); }
@@ -247,6 +275,7 @@ body {
 .loading-steps li.active  { color: var(--gold-light); font-weight: 400; }
 .step-dot                 { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .loading-steps li.active .step-dot { animation: pulse 1s ease infinite; }
+.loading-disclaimer       { margin-top: 22px; font-size: .74rem; color: var(--ivory-dim); font-weight: 300; line-height: 1.6; opacity: .85; }
 
 /* ── RESULTS ── */
 #results-section          { display: none; animation: fadeUp .48s ease both; }
@@ -457,6 +486,38 @@ body {
 @keyframes highlightMove { 0%{bottom:76px;opacity:.9;}50%{bottom:20px;opacity:1;}100%{bottom:76px;opacity:.9;} }
 
 /* ══════════════════════════════════════════════════════════════
+   READABILITY SCALING — larger monitors get more room and bigger
+   base type instead of the app staying pinned to a small column.
+══════════════════════════════════════════════════════════════ */
+@media (min-width: 1440px) {
+  html            { font-size: 17px; }
+  .main-content   { max-width: 860px; }
+}
+@media (min-width: 1920px) {
+  html            { font-size: 18px; }
+  .main-content   { max-width: 940px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — max-width: 1024px (tablet + narrow laptop)
+   Error Code Guide collapses from a persistent side panel into a
+   button that opens the same list in a modal.
+══════════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .error-guide      { display: none; }
+  .error-codes-fab  { display: flex; }
+  .app-content-row  { flex-direction: column; justify-content: flex-start; padding: 0; }
+}
+
+/* On phones the FAB shrinks to an icon-only circle so it covers less of
+   the content it floats over while scrolling. */
+@media (max-width: 480px) {
+  .error-codes-fab  { width: 46px; height: 46px; padding: 0; border-radius: 50%; justify-content: center; }
+  .error-codes-fab .fab-label { display: none; }
+  .error-codes-fab .fab-icon  { font-size: 1.15rem; }
+}
+
+/* ══════════════════════════════════════════════════════════════
    RESPONSIVE — max-width: 768px
 ══════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
@@ -465,6 +526,7 @@ body {
   .sidebar               { transform: translateX(calc(-1 * var(--sidebar-w))); }
   .sidebar.open          { transform: translateX(0); box-shadow: 4px 0 28px rgba(0,0,0,.55); }
   .app-body.sidebar-open { margin-left: 0; }
+  .history-rename-btn    { opacity: .6; } /* :hover reveal doesn't work on touch */
   .sidebar-list          { flex: 1; overflow-y: auto; min-height: 0; }
   .sidebar-footer        { flex-shrink: 0; overflow-y: auto; max-height: 220px; padding: 12px 14px; }
 
@@ -569,4 +631,17 @@ body {
 @media (max-width: 480px) {
   .plans-grid,
   .pro-grid { grid-template-columns: 1fr; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — max-width: 400px (very narrow phones, e.g. 320px)
+   The navbar is tight enough that the wordmark has to go to keep
+   the scans badge and profile menu from being squeezed off-screen.
+══════════════════════════════════════════════════════════════ */
+@media (max-width: 400px) {
+  .navbar          { padding: 0 8px; gap: 4px; }
+  .nav-brand-name  { display: none; }
+  .scans-badge     { padding: 4px 6px; gap: 2px; }
+  .user-trigger    { padding: 5px 6px; gap: 4px; }
+  .user-avatar     { width: 24px; height: 24px; font-size: .66rem; }
 }

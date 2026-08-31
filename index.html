@@ -308,6 +308,11 @@
 
   <!-- APP BODY -->
   <div class="app-body" id="app-body">
+    <div class="app-content-row">
+    <aside class="error-guide" id="error-guide">
+      <div class="error-guide-title">Error Code <span>Guide</span></div>
+      <div class="error-guide-list" id="error-guide-list"></div>
+    </aside>
     <main class="main-content">
 
       <div class="page-header">
@@ -381,6 +386,7 @@
           <li id="lstep-3"><span class="step-dot"></span> Detecting linguistic errors...</li>
           <li id="lstep-4"><span class="step-dot"></span> Generating evaluation report...</li>
         </ul>
+        <p class="loading-disclaimer">⏳ This usually takes 30–60 seconds. Please don't close or refresh this page.</p>
       </div>
 
       <!-- RESULTS -->
@@ -415,6 +421,13 @@
       </div>
 
     </main>
+
+    <!-- Error Codes button (tablet/mobile) — sits in normal flow so it
+         comes to rest just above the footer and never overlaps it. -->
+    <button class="error-codes-fab" onclick="openModal('error-codes-modal')" aria-label="Error Codes">
+      <span class="fab-icon">📖</span><span class="fab-label">Error Codes</span>
+    </button>
+    </div><!-- /app-content-row -->
 
     <!-- FOOTER — About Us is in navbar, not here -->
     <footer class="site-footer">
@@ -510,6 +523,22 @@
   </div>
 </div>
 
+<!-- ═══════════ ERROR CODES MODAL (tablet/mobile) ═══════════ -->
+<div class="modal-backdrop" id="error-codes-modal" onclick="handleModalBackdropClick(event,'error-codes-modal')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Error Code <span>Guide</span></div>
+        <div class="modal-subtitle">What each code on your annotated text means.</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('error-codes-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-guide-list" id="error-codes-modal-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Auth module -->
 <script src="./assets/js/auth.js"></script>
 
@@ -519,6 +548,37 @@
   let currentImageBase64   = null;
   let currentTranscription = '';
   let sidebarOpen          = false;
+
+  /* ── ERROR CODE GUIDE ── */
+  const ERROR_CODES = [
+    { code: 'SP',   label: 'Spelling',              desc: "Word doesn't exist in English — a pure typo." },
+    { code: 'SVA',  label: 'Subject-Verb Agreement', desc: "Verb number doesn't match the subject." },
+    { code: 'T',    label: 'Verb Tense',             desc: 'Wrong tense used for the context.' },
+    { code: 'ART',  label: 'Article',                desc: 'Wrong, missing, or extra a / an / the.' },
+    { code: 'PREP', label: 'Preposition',            desc: 'Wrong or missing preposition.' },
+    { code: 'PL',   label: 'Plural / Singular',      desc: 'Wrong noun number.' },
+    { code: 'WW',   label: 'Wrong Word',             desc: 'Real word, spelled correctly, wrong meaning.' },
+    { code: 'WF',   label: 'Word Form',              desc: 'Right root word, wrong grammatical form.' },
+    { code: 'WO',   label: 'Word Order',             desc: 'Words placed in the wrong order.' },
+    { code: 'GR',   label: 'General Grammar',        desc: 'Grammar issue not covered by another code.' },
+    { code: 'MW',   label: 'Missing Word',           desc: 'A required word is absent.' },
+    { code: 'P',    label: 'Punctuation',            desc: 'Missing/wrong punctuation or capitalization.' },
+    { code: 'RW',   label: 'Rewrite',                desc: 'Sentence too broken — needs a full rewrite.' },
+  ];
+
+  function renderErrorCodeGuide() {
+    const html = ERROR_CODES.map(e => `
+      <div class="error-guide-item">
+        <span class="error-guide-code">${e.code}</span>
+        <span class="error-guide-text"><strong>${e.label}</strong> — ${e.desc}</span>
+      </div>
+    `).join('');
+    const desktop = document.getElementById('error-guide-list');
+    const modal   = document.getElementById('error-codes-modal-list');
+    if (desktop) desktop.innerHTML = html;
+    if (modal)   modal.innerHTML   = html;
+  }
+  renderErrorCodeGuide();
 
   /* ─────────────────────────────────────────────────────────────
      AUTH STATE
@@ -647,7 +707,7 @@
     const sidebar  = document.getElementById('sidebar');
     const appBody  = document.getElementById('app-body');
     const overlay  = document.getElementById('sidebar-overlay');
-    const isMobile = window.innerWidth < 768;
+    const isMobile = window.innerWidth <= 768;
     if (sidebarOpen) {
       sidebar.classList.remove('collapsed');
       if (isMobile) { sidebar.classList.add('open'); overlay.style.display = 'block'; }
@@ -889,14 +949,59 @@ function closeMobileNav() {
     }
     listEl.innerHTML = evaluations.map(e => {
       const date = new Date(e.createdAt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+      const displayTitle = e.title || e.summary || 'Evaluation';
       return `<div class="history-item" onclick="loadHistoryEntry('${e.id}')">
-        <div class="history-item-title">${escHtml(e.summary || 'Evaluation')}</div>
+        <div class="history-item-title-row">
+          <div class="history-item-title" id="hist-title-${e.id}" ondblclick="event.stopPropagation(); startRenameHistoryItem('${e.id}')">${escHtml(displayTitle)}</div>
+          <button class="history-rename-btn" onclick="event.stopPropagation(); startRenameHistoryItem('${e.id}')" title="Rename">✎</button>
+        </div>
         <div class="history-item-meta">
           <span class="history-item-date">${date}</span>
           <span class="history-err-badge">${e.totalErrors} errors</span>
         </div>
       </div>`;
     }).join('');
+  }
+
+  /* ── RENAME HISTORY ITEM ── */
+  function startRenameHistoryItem(id) {
+    const titleEl = document.getElementById(`hist-title-${id}`);
+    if (!titleEl || titleEl.querySelector('input')) return; // already editing
+    const currentTitle = titleEl.textContent;
+    titleEl.innerHTML = `<input type="text" class="history-rename-input"
+      value="${escHtml(currentTitle)}" data-original="${escHtml(currentTitle)}" maxlength="120"
+      onclick="event.stopPropagation()"
+      onkeydown="handleRenameKeydown(event, '${id}')"
+      onblur="commitRenameHistoryItem('${id}', this)" />`;
+    const input = titleEl.querySelector('input');
+    input.focus();
+    input.select();
+  }
+
+  function handleRenameKeydown(e, id) {
+    e.stopPropagation();
+    if (e.key === 'Enter')  { e.preventDefault(); e.target.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.target.dataset.cancelled = 'true'; e.target.blur(); }
+  }
+
+  async function commitRenameHistoryItem(id, inputEl) {
+    const cancelled = inputEl.dataset.cancelled === 'true';
+    const original  = inputEl.dataset.original || '';
+    const newTitle  = inputEl.value.trim();
+    if (cancelled || !newTitle || newTitle === original) { loadHistory(); return; }
+    try {
+      const token = await getIdToken();
+      const res   = await fetch(`/api/history/${id}/rename`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      if (!res.ok) throw new Error('Rename failed');
+    } catch (e) {
+      console.warn('Rename failed:', e.message);
+    } finally {
+      loadHistory(); // reflects the saved name (or reverts on failure)
+    }
   }
 
   async function loadHistoryEntry(id) {
@@ -974,6 +1079,7 @@ function closeMobileNav() {
   /* ── GRADING ── */
 async function submitForGrading() {
   if (!currentImageBase64 || !currentImageFile) return;
+  reEvalCount = 0; // new paper session — next re-evaluation is free again
   setView('loading'); animateLoadingSteps();
   const isImage = currentImageFile.type.startsWith('image/');
   try {
@@ -1059,28 +1165,17 @@ function animateLoadingSteps() {
     document.getElementById('annotated-text-display').innerHTML = buildHighlightedHTML(currentTranscription, data.errors);
 
     const errorCount = (data.errors && data.errors.length) || 0;
-    const scoreVal   = Math.max(0, 100 - (errorCount * 5));
-    const circ       = 2 * Math.PI * 30;
-    const offset     = circ - (scoreVal / 100) * circ;
+    const trimmedText = currentTranscription.trim();
+    const wordCount   = trimmedText ? trimmedText.split(/\s+/).length : 0;
 
     document.getElementById('score-banner').innerHTML = `
-      <div class="score-circle">
-        <svg width="72" height="72" viewBox="0 0 72 72">
-          <circle cx="36" cy="36" r="30" fill="none" stroke="var(--navy-border)" stroke-width="5"/>
-          <circle cx="36" cy="36" r="30" fill="none"
-            stroke="${scoreVal >= 70 ? 'var(--gold)' : 'var(--red-err)'}"
-            stroke-width="5" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
-            stroke-linecap="round" style="transition:stroke-dashoffset 1.1s ease;"/>
-        </svg>
-        <div class="score-circle-text">${scoreVal}<small>/100</small></div>
-      </div>
       <div class="score-meta">
         <h3>${escHtml(data.summary || 'Evaluation Complete')}</h3>
         <p>Review annotated errors below. Switch to <em>Edit &amp; Re-Evaluate</em> to fix transcription mistakes.</p>
       </div>
       <div class="score-stats">
         <div class="stat-item"><div class="stat-value err">${errorCount}</div><div class="stat-label">Errors Found</div></div>
-        <div class="stat-item"><div class="stat-value">${scoreVal}</div><div class="stat-label">Est. Score</div></div>
+        <div class="stat-item"><div class="stat-value">${wordCount}</div><div class="stat-label">Words</div></div>
       </div>`;
 
     const errorsContainer = document.getElementById('errors-list');
@@ -1191,6 +1286,7 @@ function animateLoadingSteps() {
     document.getElementById('score-banner').innerHTML           = '';
     document.getElementById('errors-list').innerHTML            = '';
     document.getElementById('annotated-text-display').innerHTML = '—';
+    reEvalCount = 0; // new paper session — next re-evaluation is free again
   }
 
   function showErrorBanner(message) {
